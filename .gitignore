@@ -1,0 +1,15 @@
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+.pytest_cache/
+build/
+dist/
+# compiled corpus artifacts are reproducible from corpus/source
+corpus/pdf/
+corpus/build/
+debug-out/
+.DS_Store
+corpus/build/
+*.svg
+*.html
