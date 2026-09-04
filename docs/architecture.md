@@ -87,9 +87,14 @@ Established empirically on stock pdfTeX 1.40.29 output; see `docs/prior-art.md` 
 | `mathml/lgeval.py` | LgEval label graphs, for comparison with CROHME/MathSeer tooling |
 | `latex/serializer.py` | the tree back to LaTeX, for the round-trip oracle |
 | `latex/data/tex_commands.py` | generated from LaTeX's own \DeclareMathSymbol tables |
+| `asciimath/serializer.py` | AsciiMath, a linear syntax that survives magnification |
+| `omml/serializer.py` | Office MathML — what a `.docx` stores, so Word can edit it |
+| `speech/engine.py` | bridge to MathJax's speech-rule-engine (ClearSpeak / MathSpeak) |
 | `eval/roundtrip.py` | recompile and compare |
 | `eval/mathml_compare.py` | read MathML back into a comparison signature |
 | `eval/latexml.py` | LaTeXML as an independent oracle |
+| `eval/asciimath_roundtrip.py` | py-asciimath reads our AsciiMath back |
+| `eval/omml_roundtrip.py` | pandoc opens a Word package we build and reads the OMML back |
 | `eval/arxiv_eval.py` | score against a paper's own source |
 | `corpus/arxiv.py` | fetch an e-print, split out its displays |
 | `detection/equations.py` | geometric displayed-equation detection |
@@ -209,7 +214,13 @@ Each of these is a real failure with a known cause, not a mystery.
    as evidence rather than checking it. Parsing lig/kern would make accents exact.
 5. **Inline mathematics is not detected**, only displayed equations. The decompiler itself
    is style-agnostic; pass `--bbox` for inline formulae.
-6. **Non-TeX fonts degrade to ToUnicode**, flagged as `unicode_source: "tounicode"`, with
+6. **`\lim`-style operators lose their under-limit.** `\lim_{x \to 0}` sets `lim` as an
+   upright Op with its limit centred below, exactly as `\sum` does, but the operator is a
+   word from cmr rather than a cmex glyph, so `operators.py` does not recognise it as a
+   limit-bearing base and the subscript is attached to whatever precedes it. The fix is to
+   let the large-operator recogniser accept a multi-letter upright Op; the geometry is
+   already measured.
+7. **Non-TeX fonts degrade to ToUnicode**, flagged as `unicode_source: "tounicode"`, with
    metrics from the PDF's `/Widths`. Structure recovery still works but the residuals stop
    being meaningful.
 
@@ -328,6 +339,45 @@ our hand-written Computer Modern tables did not cover, so `\Box` arrived as an `
 `tools/gen_extra_symbols.py` composes LaTeXML's `DefMath` command→Unicode declarations
 with LaTeX's `\DeclareMathSymbol` command→slot declarations to get glyph→Unicode and
 glyph→atom-class for 201 more symbols, generated rather than transcribed.
+
+## Output formats, and how each is checked
+
+Presentation MathML is the primary target; the tree also serialises to LaTeX (the
+round-trip oracle), AsciiMath, Office MathML, an LgEval label graph, JSON, and speech.
+
+A serialiser is the one component whose mistakes are invisible to the rest of the suite:
+the tree can be exactly right and the text still say something else, because nothing
+downstream reads it. So each writer is checked against a reader that is not ours.
+
+| writer | independent reader | result on the 58-expression corpus |
+|---|---|---|
+| MathML | LaTeXML | 56/58 (the two are LaTeXML's reading) |
+| LaTeX | pdfTeX, glyph by glyph | 58/58 glyph-identical |
+| AsciiMath | `py-asciimath` | 57/58 (the one is that library's missing `tilde`) |
+| OMML | pandoc's `docx` reader | 58/58 |
+
+Each comparison folds the distinctions the target format genuinely cannot carry, and each
+fold is named and justified in the oracle module rather than applied quietly. AsciiMath,
+for instance, has one syntax for limits above and below and to the right, so that
+distinction cannot survive its round trip; OMML survives it but pandoc's MathML does not
+carry `m:limLoc`.
+
+Two decisions in these writers are worth recording, because both are places where the
+obvious mapping asserts something the page does not say.
+
+**AsciiMath groups a scripted base invisibly.** `^` and `_` consume what *follows* them,
+so a bracket before one is printed rather than eaten: `(x^2)_i` claims parentheses that
+were never on the page. `{: :}` groups without drawing, which is what the TeX group did.
+
+**OMML leaves an n-ary's operand slot empty.** Word's `m:nary` has a body slot, and
+filling it with whatever follows the operator would be the natural thing to do — but TeX
+does not scope `x_i` inside `\sum_i` and neither does the PDF, so the operand stays a
+sibling and the slot stays empty.
+
+Speech gets a third: **an unnamed glyph is announced as unrecognised.** In MathML we write
+one as `□`, which any speech engine reads as "white square" — a real operator, and a
+listener has no way to tell it apart from one we meant. Measured inter-atom spacing is
+dropped for the same reason: `mspace` is read aloud as "empty".
 
 ## Comparison with MathSeer
 

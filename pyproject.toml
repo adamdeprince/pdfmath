@@ -16,6 +16,9 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=7", "hypothesis>=6"]
+# Independent readers for the AsciiMath and OMML writers.  Tests that need
+# them skip when they are absent; nothing at runtime imports them.
+oracles = ["py-asciimath>=0.3", "pypandoc_binary>=1.13"]
 pdf = ["pikepdf>=8"]
 
 [project.scripts]

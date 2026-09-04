@@ -26,6 +26,8 @@ from ..fonts.normalize import identify
 from ..fonts.tfm import SIGMA_NAMES, XI_NAMES, load_tfm
 from ..geometry.bbox import BBox
 from ..mathml.serializer import to_mathml
+from ..speech.engine import DOMAINS as SPEECH_DOMAINS
+from ..speech.engine import STYLES as SPEECH_STYLES
 from ..parse.context import ParseContext, Trace
 from ..parse.driver import parse
 from ..units import bp_to_pt
@@ -101,6 +103,7 @@ def cmd_extract(args: argparse.Namespace) -> int:
 
     style = _style(args.style)
     results = []
+    spoken: list[tuple[dict, Any]] = []
     pages = list(extract_pages(args.pdf, [args.page] if args.page else None))
     region = _bbox(args.bbox, args.bbox_bp)
     for page in pages:
@@ -121,9 +124,29 @@ def cmd_extract(args: argparse.Namespace) -> int:
                 "glyph_count": len(src.glyphs),
                 "rule_count": len(src.rules),
             }
-            if args.mathml or not args.tree:
+            if args.latex:
+                from ..latex.serializer import to_latex
+                rendered = to_latex(tree)
+                entry["latex"] = rendered.latex
+                if rendered.unreproducible:
+                    entry["latex_unreproducible"] = rendered.unreproducible
+            if args.asciimath:
+                from ..asciimath.serializer import to_asciimath
+                am = to_asciimath(tree)
+                entry["asciimath"] = am.asciimath
+                if am.unreproducible:
+                    entry["asciimath_unreproducible"] = am.unreproducible
+            if args.omml:
+                from ..omml.serializer import to_omml
+                om = to_omml(tree, indent=not args.compact, display=True)
+                entry["omml"] = om.omml
+                if om.unreproducible:
+                    entry["omml_unreproducible"] = om.unreproducible
+            if args.mathml or not _requested(args):
                 entry["mathml"] = to_mathml(tree, indent=not args.compact,
                                             include_provenance=args.provenance)
+            if args.speech:
+                spoken.append((entry, tree))
             if args.tree:
                 entry["tree"] = tree.to_json()
             if args.lg:
@@ -136,12 +159,26 @@ def cmd_extract(args: argparse.Namespace) -> int:
             equations.append(entry)
         results.append({"page": page.page, "equations": equations})
 
+    if spoken:
+        from ..speech import SpeechError, speak_batch, speech_mathml
+        try:
+            said = speak_batch([speech_mathml(t, indent=False) for _, t in spoken],
+                               domain=args.speech_style,
+                               style=args.speech_verbosity,
+                               markup="ssml" if args.ssml else "none")
+        except SpeechError as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
+        for (entry, _), text in zip(spoken, said):
+            entry["speech"] = text
+
     payload: Any = results[0] if args.page and results else results
-    if args.mathml and not args.json:
+    single = _single_text_format(args)
+    if single and not args.json and not args.tree:
         found = 0
         for pg in results:
             for eq in pg["equations"]:
-                print(eq["mathml"])
+                print(eq[single])
                 found += 1
         if not found:
             print("no displayed equation detected; pass --bbox to decompile a region "
@@ -149,6 +186,54 @@ def cmd_extract(args: argparse.Namespace) -> int:
             return 1
         return 0
     print(json.dumps(payload, indent=None if args.compact else 2, ensure_ascii=False))
+    return 0
+
+
+#: Output formats that are text a person can read straight out of the terminal.  When
+#: exactly one is asked for, it is printed bare rather than wrapped in JSON.
+_TEXT_FORMATS = ("mathml", "latex", "asciimath", "omml", "speech")
+
+
+def _requested(args: argparse.Namespace) -> bool:
+    """True when the command line named any output format at all."""
+    return bool(args.tree or args.lg
+                or any(getattr(args, f, False) for f in _TEXT_FORMATS))
+
+
+def _single_text_format(args: argparse.Namespace) -> Optional[str]:
+    chosen = [f for f in _TEXT_FORMATS if getattr(args, f, False)]
+    if not chosen and not _requested(args):
+        return "mathml"
+    return chosen[0] if len(chosen) == 1 else None
+
+
+def cmd_speak(args: argparse.Namespace) -> int:
+    """Read a document's equations aloud, as text."""
+    from ..detection.equations import find_displayed_equations
+    from ..speech import SpeechError, speak_batch, speech_mathml
+
+    style = _style(args.style)
+    found: list[tuple[int, Any, Any]] = []
+    for page in extract_pages(args.pdf, [args.page] if args.page else None):
+        region = _bbox(args.bbox, args.bbox_bp)
+        boxes = ([region] if region is not None
+                 else [r.bbox for r in find_displayed_equations(page)])
+        for box in boxes:
+            _, tree, _ = _parse_region(page, box, style)
+            found.append((page.page, box, tree))
+    if not found:
+        print("no displayed equation detected; pass --bbox to speak a region directly",
+              file=sys.stderr)
+        return 1
+    try:
+        said = speak_batch([speech_mathml(t, indent=False) for _, _, t in found],
+                           domain=args.rules, style=args.verbosity,
+                           markup="ssml" if args.ssml else "none")
+    except SpeechError as exc:
+        print(str(exc), file=sys.stderr)
+        return 2
+    for (page_no, _, _), text in zip(found, said):
+        print(f"page {page_no}: {text}" if args.label else text)
     return 0
 
 
@@ -520,6 +605,19 @@ def build_parser() -> argparse.ArgumentParser:
     e = sub.add_parser("extract", help="decompile equations to MathML")
     add_common(e)
     e.add_argument("--mathml", action="store_true", help="print MathML only")
+    e.add_argument("--latex", action="store_true", help="include LaTeX")
+    e.add_argument("--asciimath", action="store_true",
+                   help="include AsciiMath, a linear syntax that stays readable")
+    e.add_argument("--omml", action="store_true",
+                   help="include Office MathML, the equation format Word stores")
+    e.add_argument("--speech", action="store_true",
+                   help="include a spoken rendering (needs tools/sre; see `speak`)")
+    e.add_argument("--speech-style", choices=SPEECH_DOMAINS, default="clearspeak",
+                   help="which rule set to speak with (default: clearspeak)")
+    e.add_argument("--speech-verbosity", choices=SPEECH_STYLES, default="default",
+                   help="how much bracketing to speak (default: default)")
+    e.add_argument("--ssml", action="store_true",
+                   help="emit SSML rather than plain text, for a speech synthesiser")
     e.add_argument("--tree", action="store_true", help="include the full tree")
     e.add_argument("--lg", action="store_true",
                    help="include an LgEval label graph, for comparison against "
@@ -530,6 +628,22 @@ def build_parser() -> argparse.ArgumentParser:
                    help="emit glyph ids as MathML attributes")
     e.add_argument("--compact", action="store_true")
     e.set_defaults(func=cmd_extract)
+
+    k = sub.add_parser("speak", help="read a document's equations aloud, as text")
+    k.add_argument("pdf")
+    k.add_argument("--page", type=int, help="1-based page number")
+    k.add_argument("--bbox", help="x0,y0,x1,y1 in TeX points from the page's bottom-left")
+    k.add_argument("--bbox-bp", action="store_true",
+                   help="interpret --bbox in PDF big points instead")
+    k.add_argument("--style", choices=[s.name.lower() for s in Style], default="display")
+    k.add_argument("--rules", choices=SPEECH_DOMAINS, default="clearspeak",
+                   help="clearspeak reads naturally; mathspeak is unambiguous")
+    k.add_argument("--verbosity", choices=SPEECH_STYLES, default="default",
+                   help="brief and sbrief drop the longer bracketing phrases")
+    k.add_argument("--ssml", action="store_true",
+                   help="emit SSML, so a synthesiser pauses in the right places")
+    k.add_argument("--label", action="store_true", help="prefix each line with its page")
+    k.set_defaults(func=cmd_speak)
 
     x = sub.add_parser("explain", help="why the parser made an inference")
     add_common(x, page_required=True)

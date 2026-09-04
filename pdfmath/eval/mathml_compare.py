@@ -40,12 +40,12 @@ _INVISIBLE = re.compile(r"[⁡-⁤​⁠]")
 #: Accent marks come in spacing and combining forms, and converters differ over which to
 #: use: LaTeXML writes U+0304 COMBINING MACRON where we write U+00AF MACRON, and U+2192
 #: RIGHTWARDS ARROW for a vector where we write U+20D7.  Same mark on the page.
-_ACCENT_CANON = {
+ACCENT_CANON = {
     "^": "hat", "\u0302": "hat", "\u02c6": "hat",
-    "\u00af": "bar", "\u0304": "bar", "\u203e": "bar",
+    "\u00af": "bar", "\u0304": "bar", "\u203e": "bar", "\u0305": "bar",
     "\u02d9": "dot", "\u0307": "dot",
     "\u00a8": "ddot", "\u0308": "ddot",
-    "~": "tilde", "\u0303": "tilde", "\u02dc": "tilde",
+    "~": "tilde", "\u0303": "tilde", "\u02dc": "tilde", "\u223c": "tilde",
     "\u20d7": "vec", "\u2192": "vec", "\u2b0d": "vec",
     "\u02c7": "check", "\u030c": "check",
     "\u02d8": "breve", "\u0306": "breve",
@@ -209,7 +209,7 @@ def relax(sig: Any) -> Any:
         return ("Accent", mark, tuple(relax(k) for k in sig[1]))
     if head == "Accent" and len(sig) == 3:
         mark = normalise_text(sig[1])
-        return ("Accent", _ACCENT_CANON.get(mark, mark),
+        return ("Accent", ACCENT_CANON.get(mark, mark),
                 tuple(relax(k) for k in sig[2]))
     return tuple(
         tuple(relax(k) for k in part) if isinstance(part, tuple) else part

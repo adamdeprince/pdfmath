@@ -142,7 +142,7 @@ Ghostscript in 2018 and 2024, not by pdfTeX in 1991. They are genuine TeX output
 through dvips, so the extraction results hold, but comparing them against a TeX Live 2026
 rebuild introduces a toolchain difference that the first row does not have.
 
-## Quickstart## Quickstart
+## Quickstart
 
 ```bash
 pip install -e ".[dev]"
@@ -151,6 +151,7 @@ pdfmath dump      paper.pdf --page 3                 # positioned glyphs and rul
 pdfmath debug-svg paper.pdf --page 3 --html -o p3.html
 pdfmath extract   paper.pdf --page 3 --mathml
 pdfmath extract   paper.pdf --page 3 --bbox 120,480,400,520 --mathml
+pdfmath speak     paper.pdf --page 3                 # read the equations aloud, as text
 pdfmath explain   paper.pdf --page 3 --node 17
 pdfmath roundtrip paper.pdf --pages 3 4 5          # recompile and compare
 pdfmath arxiv     math/0211159v1                   # score against the paper's source
@@ -163,6 +164,44 @@ A TeX installation is needed for the TFM metrics and for the synthetic corpus; t
 extraction and MathML paths work without one, with reduced precision. `pdfmath arxiv`
 additionally needs LaTeXML (`brew install latexml`), which is the independent oracle it
 compares against — nothing else does.
+
+## Output formats
+
+| Format | Flag | What it is for |
+|---|---|---|
+| Presentation MathML | `extract --mathml` | the primary target; `--provenance` adds glyph ids |
+| Speech | `speak`, `extract --speech` | ClearSpeak or MathSpeak text, or SSML |
+| AsciiMath | `extract --asciimath` | a linear syntax that stays readable magnified |
+| Office MathML | `extract --omml` | what a `.docx` stores, so Word can *edit* it |
+| LaTeX | `extract --latex` | the round-trip oracle, and useful on its own |
+| JSON tree | `extract --tree` | every node with provenance, residuals, confidence |
+| LgEval label graph | `extract --lg` | comparison against MathSeer/CROHME tooling |
+
+Ask for one and it is printed bare; ask for several and you get JSON.
+
+Speech is a bridge to MathJax's [speech-rule-engine][sre] (Apache-2.0) rather than rules
+of our own: MathSpeak and ClearSpeak are specified and user-tested, and an approximation
+would be worse in ways that are hard to notice mid-paper. It needs Node:
+
+```bash
+cd tools/sre && npm install
+pdfmath speak paper.pdf --rules mathspeak --verbosity brief
+pdfmath speak paper.pdf --ssml | your-synthesiser
+```
+
+Two things are changed before speaking, both so the listener does not hear something that
+is not on the page. A glyph we could not name at all is written `□` in MathML, which is
+read aloud as "white square" — a real operator, and indistinguishable from one we meant;
+it is announced as unrecognised instead. And the measured inter-atom spacing we carefully
+record is dropped, because `mspace` is read aloud as "empty", so a `\quad` before an
+equation number becomes a spoken word.
+
+[sre]: https://github.com/Speech-Rule-Engine/speech-rule-engine
+
+Both new writers are checked against a reader that is not ours, the way the MathML is
+checked against LaTeXML: AsciiMath through `py-asciimath` (57/58 of the extended corpus;
+the one gap is that library's missing `tilde`), and OMML through pandoc's `docx` reader,
+which opens a Word package we build and converts it back to MathML (58/58).
 
 ## What it gives you
 

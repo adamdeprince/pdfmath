@@ -1,0 +1,10 @@
+{
+  "name": "pdfmath-speech-bridge",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Bridge to MathJax's speech-rule-engine, used by pdfmath speak.",
+  "main": "speak.js",
+  "dependencies": {
+    "speech-rule-engine": "5.0.0-rc.4"
+  }
+}

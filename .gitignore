@@ -14,3 +14,7 @@ corpus/build/
 *.svg
 *.html
 corpus/arxiv/
+
+# Node bridge to the speech engine (npm install in tools/sre)
+tools/sre/node_modules/
+tools/sre/package-lock.json
