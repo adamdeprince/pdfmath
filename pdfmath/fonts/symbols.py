@@ -17,6 +17,8 @@ from dataclasses import dataclass
 from enum import IntEnum
 from typing import Optional
 
+from .data.extra_symbols import EXTRA_SYMBOLS
+
 
 class AtomClass(IntEnum):
     """TeX's math atom classes (*The TeXbook*, ch. 17)."""
@@ -318,9 +320,14 @@ _RADICAL_RE = re.compile(r"^radical(?P<suffix>big|Big|bigg|Bigg|tp|vertex|bt)?$"
 _WIDE_ACC_RE = re.compile(r"^(?P<base>hat|tilde)(?P<size>wide|wider|widest)$")
 
 
-def lookup(glyph: str) -> SymbolInfo:
-    """Everything we know about a glyph name.  Never raises; unknown names come back
-    with an empty ``unicode`` and ``AtomClass.ORD`` so nothing is silently dropped."""
+def lookup(glyph: str, encoding: Optional[str] = None) -> SymbolInfo:
+    """Everything we know about a glyph name.
+
+    Never raises: an unknown name comes back with an empty ``unicode`` and
+    ``AtomClass.ORD`` so that nothing is silently dropped.  ``encoding``, when given,
+    unlocks the generated AMS table -- the hand-written tables here cover Computer
+    Modern, and msam/msbm are filled in from LaTeXML's own declarations.
+    """
     g = glyph
 
     m = _RADICAL_RE.match(g)
@@ -387,6 +394,14 @@ def lookup(glyph: str) -> SymbolInfo:
             base = "bar"
         return SymbolInfo(g, uni, atom, role, base)
 
+    if encoding is not None:
+        entry = EXTRA_SYMBOLS.get((encoding, g))
+        if entry is not None:
+            uni, atom_name = entry
+            atom = getattr(AtomClass, atom_name, AtomClass.ORD)
+            role = (Role.DELIM_OPEN if atom is AtomClass.OPEN else
+                    Role.DELIM_CLOSE if atom is AtomClass.CLOSE else Role.SYMBOL)
+            return SymbolInfo(g, uni, atom, role, g)
     return SymbolInfo(g, "", AtomClass.ORD, Role.SYMBOL, g)
 
 

@@ -33,8 +33,18 @@ Unicode metadata, which is the specific advantage the hypothesis rests on: those
 largely do not carry a usable ToUnicode map, and a system that trusted one would be
 guessing.
 
-**What has not been established** is the comparison itself. QD-GGA has not been run here,
-so no relative number is claimed, and none should be inferred from the figures above.
+**An independent converter agrees, on synthetic and on real mathematics.** LaTeXML — the
+reference LaTeX-to-MathML converter, which reads the *source* while we read the *page* —
+agrees with 17 of 17 first-milestone ground-truth trees and 56 of 58 extended ones, which
+closes the hole that our expected answers and our LaTeX came from the same objects. On
+arXiv papers, where LaTeXML reads the author's own source, 48 of 55 displays (87.3%) come
+out structurally identical, at 100% glyph recovery (`pdfmath arxiv`). That is not the
+MathSeer comparison, but it is a real external check on real documents, and it was the
+part that could actually be run.
+
+**What has not been established** is the comparison with MathSeer itself. QD-GGA has not
+been run here, so no relative number is claimed, and none should be inferred from the
+figures above.
 
 ## Why the comparison was not run
 

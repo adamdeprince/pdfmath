@@ -25,22 +25,25 @@ import sys
 
 #: LaTeX symbol-font name -> the encoding key in pdfmath.fonts.data.tex_encodings
 FONTS = {"operators": "OT1", "letters": "OML", "symbols": "OMS",
-         "largesymbols": "OMX", "AMSa": "AMSA", "AMSb": "AMSB"}
+         "largesymbols": "OMX", "AMSa": "AMSA", "AMSb": "AMSB", "lasy": "LASY"}
 
 #: LaTeX math class -> the short name used by pdfmath.fonts.symbols.AtomClass
 CLASSES = {"ord": "Ord", "alpha": "Ord", "op": "Op", "bin": "Bin", "rel": "Rel",
            "open": "Open", "close": "Close", "punct": "Punct", "inner": "Inner"}
 
-SOURCES = ["fontmath.ltx", "amssymb.sty", "amsfonts.sty"]
+SOURCES = ["fontmath.ltx", "amssymb.sty", "amsfonts.sty", "latexsym.sty"]
 
 _SLOT = r'(?:"([0-9A-Fa-f]+)|`\\?(.)|(\d+))'
-_ARG = r'\{\s*(\\?[^}\s]+)\s*\}'
-_SYMBOL = re.compile(r'\\DeclareMathSymbol\s*' + _ARG + r'\s*\{\s*\\math(\w+)\s*\}\s*'
+#: A command argument, braced as in fontmath.ltx or bare as in latexsym.sty
+#: ("\\DeclareMathSymbol\\Box {\\mathord}{lasy}{"32}").
+_ARG = r'(?:\{\s*(?:\\?[^}\s]+)\s*\}|\s*\\[A-Za-z@]+)'
+_CMD = r'(?:\{\s*(\\?[^}\s]+?)\s*\}|\s*(\\[A-Za-z@]+))\s*'
+_SYMBOL = re.compile(r'\\DeclareMathSymbol\s*' + _CMD + r'\{\s*\\math(\w+)\s*\}\s*'
                      r'\{\s*(\w+)\s*\}\s*\{\s*' + _SLOT)
-_DELIM = re.compile(r'\\DeclareMathDelimiter\s*' + _ARG + r'\s*\{\s*\\math(\w+)\s*\}\s*'
+_DELIM = re.compile(r'\\DeclareMathDelimiter\s*' + _CMD + r'\{\s*\\math(\w+)\s*\}\s*'
                     r'\{\s*(\w+)\s*\}\s*\{\s*' + _SLOT +
                     r'\s*\}\s*\{\s*(\w+)\s*\}\s*\{\s*' + _SLOT)
-_ACCENT = re.compile(r'\\DeclareMathAccent\s*' + _ARG + r'\s*\{\s*\\math(\w+)\s*\}\s*'
+_ACCENT = re.compile(r'\\DeclareMathAccent\s*' + _CMD + r'\{\s*\\math(\w+)\s*\}\s*'
                      r'\{\s*(\w+)\s*\}\s*\{\s*' + _SLOT)
 
 
@@ -91,14 +94,16 @@ def main():
             continue
         text = source_text(path)
         for m in _SYMBOL.finditer(text):
-            cmd, cls, font, h, c, d = m.groups()
-            record(font, h, c, d, cls, cmd)
+            braced, bare, cls, font, h, c, d = m.groups()
+            record(font, h, c, d, cls, braced or bare)
         for m in _DELIM.finditer(text):
-            cmd, cls, f1, h1, c1, d1, f2, h2, c2, d2 = m.groups()
+            braced, bare, cls, f1, h1, c1, d1, f2, h2, c2, d2 = m.groups()
+            cmd = braced or bare
             record(f1, h1, c1, d1, cls, cmd)
             record(f2, h2, c2, d2, cls, cmd)
         for m in _ACCENT.finditer(text):
-            cmd, cls, font, h, c, d = m.groups()
+            braced, bare, cls, font, h, c, d = m.groups()
+            cmd = braced or bare
             if font in FONTS:
                 accents[(FONTS[font], slot(h, c, d))] = cmd
 

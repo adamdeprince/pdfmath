@@ -13,3 +13,4 @@ debug-out/
 corpus/build/
 *.svg
 *.html
+corpus/arxiv/

@@ -84,7 +84,7 @@ class FontMetrics:
         """
         ident = identify(pdf_font_name)
         name = glyph_name(ident, code)
-        sym = lookup_symbol(name) if name else SymbolInfo(
+        sym = lookup_symbol(name, ident.encoding) if name else SymbolInfo(
             f"code{code}", unicode_from_pdf or "", AtomClass.ORD, Role.SYMBOL)
 
         tfm = FontMetrics.tfm_for(pdf_font_name)

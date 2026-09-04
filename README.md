@@ -71,6 +71,29 @@ That last line is the one that matters. Those documents mostly do not carry the 
 Unicode-first extractor needs; knowing that `CMMI10 + 0x78` is `x` is what makes them
 readable at all. `pdfmath survey paper.pdf` produces the report.
 
+## Real papers, real ground truth
+
+arXiv publishes the LaTeX *source* of papers whose PDFs we can also read. LaTeXML reads
+the source, we read the page pdfTeX makes from it, and neither is derived from the other
+— so those papers are labelled examples that we did not write. `pdfmath arxiv` re-sets
+each display on its own page using the paper's own preamble (which takes equation
+detection out of the measurement), decompiles it, and compares.
+
+```
+math/0211159  Perelman, "The entropy formula for the Ricci flow", 2002
+                41 / 43 displays exact  (95.3%)
+math/0303109  Perelman, "Finite extinction time...", 2003
+                 4 /  6                 (66.7%)
+math/0405568
+                 3 /  6                 (50.0%)
+                --------------------------------
+      total    48 / 55 = 87.3% exact,  100.000% glyph recovery
+```
+
+The same machinery cross-checks the synthetic corpus: LaTeXML independently agrees with
+17 of 17 first-milestone ground-truth trees and 56 of 58 extended ones, which closes the
+hole that our expected answers and our LaTeX come from the same objects.
+
 ## The stronger check: recompile it
 
 A decompiler is validated by recompiling. `pdfmath roundtrip` serialises the recovered
@@ -107,13 +130,16 @@ pdfmath extract   paper.pdf --page 3 --mathml
 pdfmath extract   paper.pdf --page 3 --bbox 120,480,400,520 --mathml
 pdfmath explain   paper.pdf --page 3 --node 17
 pdfmath roundtrip paper.pdf --pages 3 4 5          # recompile and compare
+pdfmath arxiv     math/0211159v1                   # score against the paper's source
 pdfmath survey    paper.pdf --floor 0.9            # triage what is unresolved
 pdfmath benchmark --suite all --n 500
 pdfmath fonts     CMEX10 --code 0x58
 ```
 
 A TeX installation is needed for the TFM metrics and for the synthetic corpus; the
-extraction and MathML paths work without one, with reduced precision.
+extraction and MathML paths work without one, with reduced precision. `pdfmath arxiv`
+additionally needs LaTeXML (`brew install latexml`), which is the independent oracle it
+compares against — nothing else does.
 
 ## What it gives you
 

@@ -71,7 +71,9 @@ def compile_expressions(tex_expressions: Sequence[str], workdir: Optional[str] =
                         size: int = 10, display: bool = True,
                         name: Optional[str] = None,
                         preamble: Optional[str] = None,
-                        cache: bool = True) -> CompiledCorpus:
+                        cache: bool = True,
+                        halt_on_error: bool = True,
+                        source: Optional[str] = None) -> CompiledCorpus:
     """Run pdfTeX over the expressions and return the resulting PDF.
 
     Compilation is cached on a hash of the source, so re-running a test suite that has
@@ -79,8 +81,8 @@ def compile_expressions(tex_expressions: Sequence[str], workdir: Optional[str] =
     """
     if not have_pdflatex():
         raise CompileError("pdflatex is not on PATH")
-    source = build_document(tex_expressions, size=size, display=display,
-                            preamble=preamble)
+    source = source or build_document(tex_expressions, size=size, display=display,
+                                      preamble=preamble)
     digest = hashlib.sha256(source.encode()).hexdigest()[:16]
     stem = name or f"corpus_{digest}"
     workdir = workdir or os.path.join(tempfile.gettempdir(), "pdfmath-corpus")
@@ -98,10 +100,14 @@ def compile_expressions(tex_expressions: Sequence[str], workdir: Optional[str] =
 
     with open(tex_path, "w") as fh:
         fh.write(source)
-    proc = subprocess.run(
-        ["pdflatex", "-interaction=nonstopmode", "-halt-on-error",
-         "-output-directory", workdir, tex_path],
-        capture_output=True, text=True, timeout=300)
+    command = ["pdflatex", "-interaction=nonstopmode"]
+    if halt_on_error:
+        # Off for real documents: a paper's preamble routinely refers to labels and
+        # files we do not have, and stopping at the first would lose every display
+        # after it.  The page count is checked by the caller instead.
+        command.append("-halt-on-error")
+    command += ["-output-directory", workdir, tex_path]
+    proc = subprocess.run(command, capture_output=True, text=True, timeout=300)
     if proc.returncode != 0 or not os.path.exists(pdf_path):
         tail = proc.stdout[-3000:] if proc.stdout else proc.stderr[-3000:]
         raise CompileError(f"pdflatex failed for {stem}:\n{tail}")

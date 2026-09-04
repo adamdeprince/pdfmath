@@ -58,6 +58,8 @@ _FAMILIES: dict[str, tuple[str, str, str, str]] = {
     # --- AMS ---
     "msam":    ("AMSA",  "normal",      "msam",    "AMS Symbols A"),
     "msbm":    ("AMSB",  "double-struck", "msbm",  "AMS Symbols B"),
+    "lasy":    ("LASY",  "normal",      "lasy",    "LaTeX Symbols"),
+    "lasyb":   ("LASY",  "bold",        "lasyb",   "LaTeX Symbols Bold"),
     "eufm":    ("EUFRAK", "fraktur",    "eufm",    "Euler Fraktur"),
     "eufb":    ("EUFRAK", "bold-fraktur", "eufb",  "Euler Fraktur Bold"),
     "eusm":    ("OMS",   "script",      "eusm",    "Euler Script"),
@@ -111,7 +113,7 @@ class FontIdentity:
 
     @property
     def is_math_font(self) -> bool:
-        return self.encoding in ("OML", "OMS", "OMX", "AMSA", "AMSB")
+        return self.encoding in ("OML", "OMS", "OMX", "AMSA", "AMSB", "LASY")
 
     @property
     def is_extension_font(self) -> bool:

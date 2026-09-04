@@ -392,6 +392,63 @@ def _write_label_graphs(directory: str, suite: str, corpus, report) -> None:
     print(f"wrote label graphs for {suite} to {directory}", file=sys.stderr)
 
 
+def cmd_arxiv(args: argparse.Namespace) -> int:
+    """Score the decompiler against a real paper's own LaTeX source.
+
+    Both sides start from the same source and neither is derived from the other: LaTeXML
+    reads it, we read the page pdfTeX makes from it.  Each display is re-set on its own
+    page using the paper's preamble, which takes equation detection out of the
+    measurement so that what is scored is the decompiler.
+    """
+    from ..eval.arxiv_eval import evaluate
+    from ..eval.latexml import available
+
+    if not available():
+        print("latexmlmath is not installed (brew install latexml)", file=sys.stderr)
+        return 2
+
+    reports = []
+    scored = matched = glyphs = in_tree = 0
+    for identifier in args.identifiers:
+        result = evaluate(identifier, args.cache, workdir=args.workdir,
+                          limit=args.limit)
+        reports.append(result)
+        scored += len(result.scored)
+        matched += result.matched
+        glyphs += sum(r.glyphs for r in result.results)
+        in_tree += sum(r.glyphs_in_tree for r in result.results)
+
+    if args.json:
+        print(json.dumps({
+            "papers": [r.to_json() for r in reports],
+            "totals": {"scored": scored, "matched": matched,
+                       "accuracy": round(matched / scored, 6) if scored else 0.0,
+                       "glyph_recovery": (round(in_tree / glyphs, 6) if glyphs else 1.0)},
+        }, indent=2, ensure_ascii=False))
+        return 0
+
+    for result in reports:
+        j = result.to_json()
+        if j["error"]:
+            print(f"  {j['identifier']:<20s} skipped: {j['error']}")
+            continue
+        print(f"  {j['identifier']:<20s} {j['scored']:3d} scored  {j['matched']:3d} "
+              f"matched ({100 * j['accuracy']:5.1f}%)  glyph recovery "
+              f"{100 * j['glyph_recovery']:6.2f}%")
+        for reason, n in j["skipped"].items():
+            print(f"        {n:3d} skipped: {reason}")
+        if args.show:
+            for r in [x for x in result.scored if not x.matched][:args.show]:
+                print(f"        DIFF {r.tex[:70]!r}")
+                print(f"             expected {str(r.expected)[:120]}")
+                print(f"             actual   {str(r.actual)[:120]}")
+    if scored:
+        print()
+        print(f"  total: {matched}/{scored} = {100 * matched / scored:.1f}% exact, "
+              f"glyph recovery {100 * in_tree / max(glyphs, 1):.3f}%")
+    return 0
+
+
 def cmd_fonts(args: argparse.Namespace) -> int:
     ident = identify(args.font)
     tfm = load_tfm(ident.tfm_name) if ident.tfm_name else None
@@ -527,6 +584,20 @@ def build_parser() -> argparse.ArgumentParser:
     v.add_argument("--mathml", action="store_true")
     v.add_argument("--json", action="store_true")
     v.set_defaults(func=cmd_survey)
+
+    a = sub.add_parser("arxiv",
+                       help="score against a real paper's own LaTeX source, via LaTeXML")
+    a.add_argument("identifiers", nargs="+",
+                   help="arXiv identifiers, e.g. math/0211159v1")
+    a.add_argument("--cache", default="corpus/arxiv",
+                   help="where to keep downloaded sources")
+    a.add_argument("--workdir", default=None)
+    a.add_argument("--limit", type=int, default=None,
+                   help="score at most this many displays per paper")
+    a.add_argument("--show", type=int, default=0,
+                   help="print this many disagreements per paper")
+    a.add_argument("--json", action="store_true")
+    a.set_defaults(func=cmd_arxiv)
 
     f = sub.add_parser("fonts", help="what we know about a TeX font")
     f.add_argument("font", help="a PDF font name, e.g. CMMI10 or ABCDEF+CMSY7")

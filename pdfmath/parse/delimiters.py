@@ -114,13 +114,26 @@ def _match(units: list[Unit], i: int, ctx: ParseContext) -> Optional[int]:
 
 
 def _match_neutral(units: list[Unit], i: int, ctx: ParseContext) -> Optional[int]:
+    """Find the partner of a neutral fence such as ``|`` or ``\\|``.
+
+    Baker could not solve this and neither can geometry: the two ends are the same
+    glyph, so nothing on the page says which is which.  What can be said is that they
+    come in pairs, and that ``|a| + |b|`` reads left to right.  So when an even number
+    of the same neutral fence stands in one list, they are paired in order; an odd
+    number means at least one is not a fence at all -- a ``\\mid``, a norm bar left
+    unmatched -- and none of them is paired.  The resulting node records the lower
+    confidence this deserves.
+    """
     base = units[i].symbol.base if units[i].symbol else None
-    same = [j for j in range(i + 1, len(units))
+    same = [j for j in range(len(units))
             if _is_neutral(units[j]) and units[j].symbol
             and units[j].symbol.base == base]
-    if len(same) != 1:
-        return None                 # ambiguous; leave both as ordinary operators
-    j = same[0]
+    if len(same) % 2 or i not in same:
+        return None
+    position = same.index(i)
+    if position % 2:
+        return None                 # this one is a closer; its opener claimed it
+    j = same[position + 1]
     return j if j > i + 1 else None
 
 

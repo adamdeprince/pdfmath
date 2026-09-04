@@ -18,6 +18,7 @@ SOURCES = {
     "EUFRAK": "eufm10.afm",    # Euler Fraktur
     "CMSS":  "cmss10.afm",
     "CMTI":  "cmti10.afm",
+    "LASY":  "lasy10.afm",     # latexsym: \Box, \Diamond, \mho, \leadsto, ...
 }
 
 
