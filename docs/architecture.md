@@ -368,13 +368,18 @@ downstream reads it. So each writer is checked against a reader that is not ours
 | LaTeX | pdfTeX, glyph by glyph | 58/58 glyph-identical |
 | AsciiMath | `py-asciimath` | 57/58 (the one is that library's missing `tilde`) |
 | OMML | pandoc's `docx` reader | 58/58 |
-| WordPerfect 5.1 | *none available* | goldens only |
+| WordPerfect 5.1 | *not wired up* | goldens only |
 
-WordPerfect is the exception and is worth stating plainly: nothing available parses the
-5.1 equation language, so that writer has no independent reader and rests on goldens.
-Its core grammar is taken from a citable reference; the accent commands and the Greek
-case convention are not, and are listed in `UNVERIFIED` so the output can report which
-of its commands are believed rather than sourced.
+WordPerfect is the exception and is worth stating plainly: that writer has no automated
+check. Its vocabulary is not guesswork — the grammar, the delimiter names (`LINE`,
+`DLINE`, `LBRACE`, `LANGLE`, `LFLOOR`, `LCEIL`, and `.` for a fence that draws nothing)
+and the symbol names come from the equation parser in the `wp51` project, which reads
+this language and emits LaTeX. But `wp51` exposes no command for a bare equation string,
+so nothing runs it against our output. Wiring that up would close the last gap in the
+table; it needs one subcommand there. Only the accent commands remain unconfirmed — they
+are in the symbol palette but not in `wp51`'s style list — and they are listed in
+`UNVERIFIED` so the output reports which of its commands are believed rather than
+sourced.
 
 Each comparison folds the distinctions the target format genuinely cannot carry, and each
 fold is named and justified in the oracle module rather than applied quietly. AsciiMath,

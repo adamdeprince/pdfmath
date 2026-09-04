@@ -6,23 +6,28 @@ language descended from troff's ``eqn``: ``{x} over {y}``, ``x sup 2``, ``sqrt {
 AsciiMath is, because its braces group without printing, so a compound base needs no
 special trick.
 
-**What is verified and what is not.**  The core grammar below is taken from a WordPerfect
-equation FAQ (linked in the README): ``over``, ``sup``/``sub`` and their ``^``/``_``
-shorthands, ``sqrt``, ``nroot``, ``from``/``to``, ``left``/``right`` used strictly in
-pairs, ``{}`` for grouping, ``~`` for a full space and a backtick for a thin one,
-``matrix`` with ``&`` between columns and ``#`` between rows, ``matform``, ``stack``,
-``stackalign``, ``func`` for upright function names, ``int``, ``sum`` and ``lim``.
+**Where the vocabulary comes from.**  The grammar -- ``over``, ``sup``/``sub`` and their
+``^``/``_`` shorthands, ``sqrt``, ``nroot`` (degree first), ``from``/``to``,
+``left``/``right`` used strictly in pairs, ``{}`` for grouping, ``~`` for a full space and
+a backtick for a thin one, ``matrix`` with ``&`` between columns and ``#`` between rows,
+``stack``, ``func`` for upright names -- is confirmed by a WordPerfect equation FAQ and,
+more usefully, by the equation parser in the ``wp51`` project (``src/equation.rs``), which
+reads the language and emits LaTeX.  The delimiter names (``LINE``, ``DLINE``, ``LBRACE``,
+``LANGLE``, ``LFLOOR``, ``LCEIL``, and ``.`` for a fence that draws nothing) and the
+symbol names ``union``, ``intersect``, ``inf``, ``dotsaxis``/``dotslow``/``dotsvert``/
+``dotsdiag`` are taken from that parser's own tables rather than guessed.
 
-The accent commands (``overline``, ``bar``, ``vec``, ``hat``, ``tilde``, ``dot``,
-``ddot``) and the Greek convention -- lower-case name for a lower-case letter,
-capitalised name for a capital -- follow the ``eqn`` family and the WordPerfect symbol
-palette, but I could not find a citable 5.1 reference for them.  They are marked in
-:data:`UNVERIFIED` so a reader who remembers the editor can correct them in one place.
+Only the accent commands (``bar``, ``vec``, ``hat``, ``tilde``, ``dot``, ``ddot``) remain
+unconfirmed: they are in the symbol palette but not in ``wp51``'s style list, which knows
+``BOLD``, ``ITAL``, ``FUNC``, ``UNDERLINE``, ``OVERLINE`` and ``PHANTOM``.  They stay in
+:data:`UNVERIFIED` and are reported in the output, so a reader who remembers the editor
+can correct them in one place.
 
-**There is no oracle for this one.**  The MathML, AsciiMath and OMML writers are each
-checked by reading their output back with software that is not ours; nothing available
-parses WordPerfect equations, so this writer is covered by goldens alone.  That is a
-genuinely weaker guarantee and is stated rather than glossed.
+**No automated oracle yet.**  The MathML, AsciiMath and OMML writers are each checked by
+reading their output back with software that is not ours.  ``wp51`` could do the same job
+here -- it parses this language and emits LaTeX -- but it exposes no command for a bare
+equation string, so for now this writer rests on goldens.  That is a weaker guarantee and
+is stated rather than glossed.
 """
 
 from __future__ import annotations
@@ -37,11 +42,7 @@ from ..tree.nodes import (Accent, Delimited, Fraction, Identifier, LargeOperator
 
 #: Commands whose spelling follows the ``eqn`` family and the symbol palette rather than
 #: a citable WordPerfect 5.1 reference.  See the module docstring.
-UNVERIFIED = frozenset({
-    "overline", "underline", "bar", "vec", "hat", "tilde", "dot", "ddot",
-    "lbrace", "rbrace", "langle", "rangle", "lfloor", "rfloor", "lceil", "rceil",
-    "none",
-})
+UNVERIFIED = frozenset({"bar", "vec", "hat", "tilde", "dot", "ddot"})
 
 #: Unicode -> WordPerfect command name.  Characters that stand for themselves -- digits,
 #: Latin letters, ``+``, ``-``, ``=`` -- are not listed.
@@ -51,7 +52,7 @@ _TOKENS = {
     "≅": "cong", "∝": "prop", "≪": "ll", "≫": "gg", "≺": "prec", "≻": "succ",
     # binary operators
     "×": "times", "÷": "div", "±": "pm", "∓": "mp", "⋅": "cdot", "∘": "circ",
-    "⊗": "otimes", "⊕": "oplus", "∗": "ast", "⋆": "star", "∪": "cup", "∩": "cap",
+    "⊗": "otimes", "⊕": "oplus", "∗": "ast", "⋆": "star", "∪": "union", "∩": "intersect",
     "∧": "wedge", "∨": "vee", "−": "-",
     # sets and logic
     "∈": "in", "∉": "notin", "⊂": "subset", "⊆": "subseteq", "⊃": "supset",
@@ -91,9 +92,14 @@ _ACCENTS = {
 }
 
 #: Fence character -> what follows ``left`` or ``right``.
-_FENCES = {"(": "(", ")": ")", "[": "[", "]": "]", "|": "|", "‖": "dline",
-           "{": "lbrace", "}": "rbrace", "⟨": "langle", "⟩": "rangle",
-           "⌊": "lfloor", "⌋": "rfloor", "⌈": "lceil", "⌉": "rceil"}
+_FENCES = {"(": "(", ")": ")", "[": "[", "]": "]", "/": "/",
+           "|": "LINE", "‖": "DLINE",
+           "{": "LBRACE", "}": "RBRACE", "⟨": "LANGLE", "⟩": "RANGLE",
+           "⌊": "LFLOOR", "⌋": "RFLOOR", "⌈": "LCEIL", "⌉": "RCEIL"}
+
+#: An absent fence.  ``left``/``right`` must be paired, and a lone dot is the editor's
+#: "draw nothing here" -- the same convention LaTeX spells ``\left.``.
+_NO_FENCE = "."
 
 #: Function names the editor sets upright without being told.
 _FUNCTIONS = frozenset(
@@ -244,14 +250,14 @@ class WpEqWriter:
         return f"left {self._fence(n.open)} {inner} right {self._fence(n.close)}"
 
     def _fence(self, ch: str) -> str:
-        """left and right must always be paired, so an absent side becomes ``none``."""
+        """left and right must always be paired, so an absent side becomes ``.``."""
         if not ch:
-            return self._cmd("none")
+            return _NO_FENCE
         name = _FENCES.get(ch)
         if name is None:
             self.unreproducible.append(f"no equation-language fence for {ch!r}")
-            return self._cmd("none")
-        return self._cmd(name) if name in UNVERIFIED else name
+            return _NO_FENCE
+        return name
 
     def _r_Accent(self, n: Accent) -> str:
         cmd = _ACCENTS.get(n.accent)

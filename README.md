@@ -270,8 +270,10 @@ it usable as a CI gate.
 
 The serialisers are checked the same way, each against a reader that is not ours: MathML
 against LaTeXML, AsciiMath against `py-asciimath`, OMML against pandoc's `docx` reader.
-WordPerfect is the exception — nothing available parses it, so that writer rests on
-goldens alone, and its uncommon commands are flagged in the output as unverified.
+WordPerfect has no automated check yet — its vocabulary is taken from the equation parser
+in the `wp51` project, but that exposes no command for a bare equation string — so it
+rests on goldens, and the handful of commands still unconfirmed are flagged in the
+output.
 
 Numbers and method: [docs/evaluation.md].
 

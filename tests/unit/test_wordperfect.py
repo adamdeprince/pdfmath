@@ -86,10 +86,20 @@ def test_a_fence_that_did_not_grow_is_written_plainly():
 
 
 def test_left_and_right_stay_paired_when_one_side_is_absent():
-    """The editor requires the pair, so a missing side becomes ``none``."""
+    """The editor requires the pair, so a missing side is a lone dot -- the same
+    convention LaTeX spells ``\\left.``, and what wp51's parser reads."""
     out = to_wpeq(Delimited(open="", close=")", stretchy=True, children=[it("x")]))
-    assert out.wpeq == "left none x right )"
-    assert "none" in out.unverified
+    assert out.wpeq == "left . x right )"
+
+
+def test_delimiters_use_the_editors_own_names():
+    """``|`` is written ``LINE``; a bare bar is not a delimiter the parser knows."""
+    assert wp(Delimited(open="|", close="|", stretchy=True,
+                        children=[it("x")])) == "left LINE x right LINE"
+    assert wp(Delimited(open="{", close="}", stretchy=True,
+                        children=[it("x")])) == "left LBRACE x right RBRACE"
+    assert wp(Delimited(open="⟨", close="⟩", stretchy=True,
+                        children=[it("x")])) == "left LANGLE x right RANGLE"
 
 
 def test_matrix_separates_columns_with_ampersand_and_rows_with_hash():
@@ -137,12 +147,15 @@ def test_an_unknown_glyph_is_kept_and_reported():
 
 
 def test_commands_without_a_citable_reference_are_reported():
-    """The core grammar is sourced; the accent names are not, so they say so."""
-    r = to_wpeq(Overline(children=[it("x")]))
+    """The grammar is sourced from wp51's parser; the accents are not, so they say so."""
+    r = to_wpeq(Accent(accent="⃗", children=[it("x")]))
     assert r.ok                       # it is still expressible
-    assert r.unverified == ["overline"]
-    assert "overline" in UNVERIFIED
+    assert r.unverified == ["vec"]
+    assert "vec" in UNVERIFIED
 
 
 def test_a_sourced_command_is_not_flagged():
+    """``OVERLINE`` is in wp51's style list, so it is no longer a guess."""
     assert to_wpeq(Fraction(children=[it("x"), it("y")])).unverified == []
+    assert to_wpeq(Overline(children=[it("x")])).unverified == []
+    assert "overline" not in UNVERIFIED
