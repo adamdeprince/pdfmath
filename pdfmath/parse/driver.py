@@ -349,6 +349,11 @@ def parse_units(units: list[Unit], ctx: ParseContext,
     if len(lines) > 1:
         return matrices.build(lines, ctx, _sub_parse, inside_fence).node
 
+    block_rows, outside = matrices.aligned_block(units, ctx, baseline)
+    if block_rows is not None:
+        block = matrices.build(block_rows, ctx, _sub_parse, inside_fence)
+        units = sorted(outside + [block], key=lambda u: (u.x0, -u.baseline))
+
     baseline = _row_baseline(units, ctx)
     units = scripts.attach(units, ctx, _sub_parse, baseline)
     return rows.build(units, ctx)

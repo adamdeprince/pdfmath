@@ -21,16 +21,40 @@ from __future__ import annotations
 from dataclasses import replace
 from typing import Optional, Sequence
 
-from ..fonts.symbols import Role
+from ..fonts.symbols import NEUTRAL_DELIMITERS, Role
+from ..fonts.mathparams import params_for
 from .context import ParseContext
 from .units import Unit
 
 CENTRED_ROLES = (Role.LARGE_OP, Role.DELIM_OPEN, Role.DELIM_CLOSE, Role.DELIM_PIECE)
 
 
+def is_centred(unit: Unit) -> bool:
+    """Would TeX have centred this box on the maths axis?
+
+    Large operators and every delimiter ``var_delimiter`` produced.  Neutral fences --
+    ``|`` and ``\\|`` -- have to be named explicitly: they carry an Ord atom class, so
+    the role alone does not identify them, and a tall one is as much a ``\\left``
+    delimiter as a bracket is.
+    """
+    if unit.role in CENTRED_ROLES:
+        return True
+    sym = unit.symbol
+    return sym is not None and sym.base in NEUTRAL_DELIMITERS
+
+
 def shift_of(unit: Unit, ctx: ParseContext) -> float:
-    """How far below the line's baseline this box's own baseline was placed."""
-    return 0.5 * (unit.height - unit.depth) - ctx.params.axis_height
+    """How far below the line's baseline this box's own baseline was placed.
+
+    ``axis_height`` is read from the family-2 font *at the current size*, so a fence
+    inside a superscript is centred on an axis 0.7 of the height of the outer one.  A
+    unit whose size differs from the context's is measured at its own size; getting this
+    wrong pushes a script-size delimiter far enough down to be read as a subscript.
+    """
+    axis = ctx.params.axis_height
+    if abs(unit.size - ctx.size) > ctx.eps and ctx.size > 0:
+        axis = params_for(ctx.style, ctx.text_size, size=unit.size).axis_height
+    return 0.5 * (unit.height - unit.depth) - axis
 
 
 def normalise(units: list[Unit], ctx: ParseContext) -> list[Unit]:
@@ -46,7 +70,7 @@ def normalise(units: list[Unit], ctx: ParseContext) -> list[Unit]:
     """
     out: list[Unit] = []
     for u in units:
-        if u.axis_normalised or u.role not in CENTRED_ROLES:
+        if u.axis_normalised or not is_centred(u):
             out.append(u)
             continue
         s = shift_of(u, ctx)

@@ -63,21 +63,41 @@ def pair(units: list[Unit], ctx: ParseContext, parse_group: ParseGroup,
         if _is_open(u):
             j = _match(units, i, ctx)
             if j is not None:
-                inner = units[i + 1:j]
+                inner, skipped = _enclosed(units[i + 1:j], u, units[j], ctx)
                 out.append(_build(u, units[j], inner, ctx, parse_group, row_baseline))
+                out.extend(skipped)
                 i = j + 1
                 continue
         elif _is_neutral(u):
             j = _match_neutral(units, i, ctx)
             if j is not None:
-                inner = units[i + 1:j]
+                inner, skipped = _enclosed(units[i + 1:j], u, units[j], ctx)
                 out.append(_build(u, units[j], inner, ctx, parse_group, row_baseline,
                                   neutral=True))
+                out.extend(skipped)
                 i = j + 1
                 continue
         out.append(u)
         i += 1
     return out
+
+
+def _enclosed(between: list[Unit], op: Unit, cl: Unit,
+              ctx: ParseContext) -> tuple[list[Unit], list[Unit]]:
+    """Split the material between two fences into what they actually enclose.
+
+    ``var_delimiter`` sizes a fence to cover its contents, so the contents lie within
+    the fence's vertical extent.  Anything between the two in *reading order* that does
+    not -- a different row of the table the fences are sitting in -- was never inside
+    them, and stays where it was.
+    """
+    inside, outside = [], []
+    for u in between:
+        if op.bbox.overlap_y(u.bbox) > 0 or cl.bbox.overlap_y(u.bbox) > 0:
+            inside.append(u)
+        else:
+            outside.append(u)
+    return (inside, outside) if inside else (between, [])
 
 
 def _match(units: list[Unit], i: int, ctx: ParseContext) -> Optional[int]:
@@ -111,7 +131,10 @@ def _build(op: Unit, cl: Unit, inner: list[Unit], ctx: ParseContext,
     # The fence was axis-centred on the baseline of *its own* list, which is not the
     # enclosing row's when the group is itself a script.  parse.axis has already put the
     # unit back on that baseline, so read it from there rather than from the caller.
-    baseline = op.baseline if op.axis_normalised else row_baseline
+    # The fence's own baseline, which parse.axis has already put on the line its group
+    # belongs to.  That is not the caller's row baseline when the group is itself a
+    # script, and using the caller's would read a superscripted \left| as a subscript.
+    baseline = op.baseline
     axis = baseline + ctx.params.axis_height
     ev: dict[str, Any] = {
         "open_glyph": op.symbol.glyph if op.symbol else None,

@@ -116,6 +116,8 @@ def _random_row(rng: random.Random, cfg: GenConfig, depth: int) -> Expr:
     n = rng.randint(2, cfg.max_row)
     parts: list[Expr] = [random_expr(rng, cfg, depth + 1)]
     for _ in range(n - 1):
+        # (an operator is inserted below with high probability; see the note in
+        # _no_adjacent_numbers about why a bare number pair is excluded)
         r = rng.random()
         if r < 0.45:
             parts.append(Op(*rng.choice(BINARY)))
@@ -126,7 +128,22 @@ def _random_row(rng: random.Random, cfg: GenConfig, depth: int) -> Expr:
         elif r < 0.9 and cfg.allowed("space"):
             parts.append(ThinSpace())
         parts.append(random_expr(rng, cfg, depth + 1))
-    return Seq(tuple(parts))
+    return Seq(tuple(_no_adjacent_numbers(parts)))
+
+
+def _no_adjacent_numbers(parts: list[Expr]) -> list[Expr]:
+    """Drop a number that directly follows another number.
+
+    TeX puts no glue between two Ord atoms, so "1 1" and "11" are the same page and the
+    corpus must not claim they differ.  The decompiler merges digit runs into one ``mn``,
+    which is the MathML convention and the only reading the geometry supports.
+    """
+    out: list[Expr] = []
+    for part in parts:
+        if (out and isinstance(part, Num) and isinstance(out[-1], Num)):
+            continue
+        out.append(part)
+    return out or [Num("1")]
 
 
 def _script_base(rng: random.Random, cfg: GenConfig, depth: int) -> Expr:

@@ -88,6 +88,23 @@ def merge_leaves(units: list[Unit], ctx: ParseContext) -> list[Unit]:
     if marks:
         rest = merge_leaves([u for u in units if not is_accent_glyph(u)], ctx)
         return sorted(rest + marks, key=lambda u: (u.x0, -u.baseline))
+
+    # Runs live on a baseline.  Scanning the x-ordered list directly would step from the
+    # "1" of a matrix's first row into an entry of the second row and stop, leaving
+    # "100" as "1" and "00"; grouping by baseline first makes the scan see only material
+    # that could possibly be part of the same token.
+    lanes: list[list[Unit]] = []
+    for u in sorted(units, key=lambda u: (-u.baseline, u.x0)):
+        if lanes and abs(lanes[-1][-1].baseline - u.baseline) <= ctx.baseline_tol:
+            lanes[-1].append(u)
+        else:
+            lanes.append([u])
+    if len(lanes) > 1:
+        merged: list[Unit] = []
+        for lane in lanes:
+            merged.extend(merge_leaves(lane, ctx))
+        return sorted(merged, key=lambda u: (u.x0, -u.baseline))
+
     out: list[Unit] = []
     i = 0
     while i < len(units):

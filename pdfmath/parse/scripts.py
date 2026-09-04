@@ -198,9 +198,13 @@ def _attach_one(base: Unit, cluster: list[Unit], ctx: ParseContext,
                 parse_group: ParseGroup, tol: float) -> tuple[Unit, list[Unit]]:
     """Attach the scripts that belong to ``base``; return the rest of the cluster."""
     reach = base.box_x1 + tol
-    leading = [u for u in cluster if u.x0 <= reach]
+    # box_x0, not x0: a fraction's box starts \nulldelimiterspace to the left of its
+    # rule, so a fraction used as a superscript begins at the nucleus's advance even
+    # though its ink starts 1.2 pt further right.  Measuring the ink would leave it out
+    # of the leading column and lose the cut line that separates it from the subscript.
+    leading = [u for u in cluster if u.box_x0 <= reach]
     if not leading:
-        leading = [min(cluster, key=lambda u: u.x0)]
+        leading = [min(cluster, key=lambda u: u.box_x0)]
 
     lead_bands = _bands(leading, ctx)
     cut: Optional[float] = None
@@ -235,10 +239,24 @@ def _attach_one(base: Unit, cluster: list[Unit], ctx: ParseContext,
                 continue
             same_side = (u.baseline > base.baseline) == lead_above
             limit = wide if (same_side or cut is not None) else tight
-            if u.x0 <= edge + limit:
-                assigned.append(u)
-                edge = max(edge, u.box_x1)
-                changed = True
+            if u.box_x0 > edge + limit:
+                continue
+            # Contiguity is necessary but not sufficient.  In "{D^0}^x" the outer
+            # superscript follows the inner one across a \scriptspace and is the same
+            # size as it -- and a script of the inner one would have been *smaller*, so
+            # equal size on a different baseline means a different level.  Material that
+            # really is part of this script either shares its baseline or is a script of
+            # something in it, which TeX sets one style down again.
+            group = [a for a in assigned
+                     if (a.baseline > base.baseline) == (u.baseline > base.baseline)]
+            if group:
+                lead = min(group, key=lambda a: a.x0)
+                if (abs(u.baseline - lead.baseline) > ctx.baseline_tol
+                        and u.size >= lead.size - ctx.eps):
+                    continue
+            assigned.append(u)
+            edge = max(edge, u.box_x1)
+            changed = True
 
     if cut is not None:
         sup_units = [u for u in assigned if u.bbox.cy > cut]

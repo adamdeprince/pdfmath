@@ -19,11 +19,10 @@ pdfTeX output to under a thousandth of a point (`tests/synthetic/test_appendix_g
 That is the precondition for the hypothesis, and it holds without qualification.
 
 **Using it gives exact reconstruction on the constrained corpus**: 100% exact expressions
-on the 17-case first milestone and the 58-case extended set, and 91.7%–94.3% on randomly
-generated expressions from seeds the parser was never tuned against, with 100% glyph
-recovery throughout (`pdfmath benchmark`).  On the development seed it reaches 96.75%;
-the gap between the two is what the tuning did not generalise, and both are reported
-because only the first is evidence.
+on the 17-case first milestone and the 58-case extended set, and 94.0%–97.7% on randomly
+generated expressions from three seeds the parser was never tuned against, with 100%
+glyph recovery throughout (`pdfmath benchmark`).  Held-out seeds are reported rather than
+the development seed, because only the former is evidence.
 
 **It survives contact with real 1991–2002 papers.** On 30 pages of three arXiv preprints
 (`math/9201254` 1992, `hep-th/9108028` 1991, `math/0211159` 2002 — Computer Modern, AMS

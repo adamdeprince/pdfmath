@@ -121,6 +121,41 @@ CASES = [
      "the radicand lies inside the surd's own vertical extent, which var_delimiter "
      "sized to cover it"),
 
+    ("chained-script-on-the-same-side",
+     Sup(Sup(Ident("D"), Num("0")), x),
+     "both scripts are the same size, so equal size on a different baseline is a "
+     "different level; a real nested script would have been one style smaller"),
+
+    ("tall-superscript-beside-a-subscript",
+     SubSup(x, x, Frac(Ident("q"), a)),
+     "the leading column is decided by TeX's box: a fraction's box starts "
+     "\\nulldelimiterspace left of its rule, so it begins at the nucleus's advance"),
+
+    ("fence-inside-a-script-is-centred-on-the-script's-axis",
+     Sup(x, Delim(Ident("Z"), "vert")),
+     "axis_height is read at the current size, so a script-size fence is centred on an "
+     "axis 0.7 the height of the outer one"),
+
+    ("digit-run-inside-a-table",
+     Seq((x, Mat(((Num("100"),), (Ident("h"),)), "matrix"))),
+     "token runs are merged within a baseline, not along the x order, or the scan steps "
+     "from one matrix row into the next"),
+
+    ("aligned-block-beside-other-material",
+     Seq((Mat(((Ident("P"),), (b,)), "matrix"), Num("1"))),
+     "a \\vcenter table puts the enclosing line's baseline between its rows; setting "
+     "that baseline aside first leaves rows that align"),
+
+    ("limit-wider-than-its-operator",
+     BigOp("\\bigcap", None, Seq((Ident("L"), Op("−", "-"), Ident("S"))), x),
+     "only the middle of a wide limit passes the centring test; the rest is found by "
+     "following its baseline outward"),
+
+    ("fence-inside-one-row-of-a-table",
+     Mat(((Num("1"),), (Delim(Ident("Q"), "ceil"),)), "vmatrix"),
+     "var_delimiter sizes a fence to cover its contents, so material it does not "
+     "overlap vertically was never inside it"),
+
     ("integral-with-a-delimited-superscript",
      Seq((BigOp("\\int", x, Delim(I("g"), "bracket")), x)),
      "\\int takes scripts, not limits, and its subscript sits at w - italic while its "

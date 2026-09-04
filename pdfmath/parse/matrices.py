@@ -41,6 +41,60 @@ def split_rows(units: Sequence[Unit], ctx: ParseContext) -> list[list[Unit]]:
     return [sorted((units[i] for i in band), key=lambda u: u.x0) for band in bands]
 
 
+def aligned_block(units: Sequence[Unit], ctx: ParseContext,
+                  row_baseline: float) -> tuple[Optional[list[list[Unit]]], list[Unit]]:
+    """Separate an aligned block from material sitting beside it on the outer baseline.
+
+    ``\\begin{matrix} P \\\\ b \\end{matrix} 1`` is a ``\\vcenter`` box with ``1`` next
+    to it: three baselines, of which one belongs to the enclosing line rather than to the
+    table.  Splitting all three into rows fails the coverage test -- ``1`` is a sliver --
+    and gives up, so the table is lost.  Setting the outer baseline aside first leaves
+    rows that do align, and what was set aside stays where it was, beside the table.
+
+    Three conditions keep this from firing on a scripted atom, which also has several
+    baselines:
+
+    * the table's rows are at the *enclosing* size, while scripts are one style smaller;
+    * the table occupies a contiguous stretch of the line, so nothing left outside may
+      sit within its horizontal extent;
+    * the rows have to pass the same coverage test as any other table.
+
+    Every distinct baseline is tried as the outer one, because which is the line's own is
+    not obvious from widths alone when a table has as much material as the line beside it.
+
+    Returns ``(rows, outside)``, or ``(None, units)`` when there is no such block.
+    """
+    if len(units) < 3:
+        return None, list(units)
+    full = max(u.size for u in units)
+    baselines: list[float] = []
+    for u in sorted(units, key=lambda u: -u.baseline):
+        if not baselines or abs(baselines[-1] - u.baseline) > ctx.baseline_tol:
+            baselines.append(u.baseline)
+
+    ordered = sorted(baselines, key=lambda b: abs(b - row_baseline))
+    for candidate in ordered:
+        outside = [u for u in units if abs(u.baseline - candidate) <= ctx.baseline_tol]
+        inner = [u for u in units if not any(u is o for o in outside)]
+        if not outside or len(inner) < 2:
+            continue
+        # A table's rows are set in the enclosing style; a script is one size down.
+        if any(u.size < full - ctx.eps for u in inner):
+            continue
+        rows = split_rows(inner, ctx)
+        if len(rows) < 2:
+            continue
+        threshold, _ = find_column_split(rows, ctx)
+        if threshold is None and any(len(r) > 1 for r in rows):
+            continue
+        x0 = min(u.x0 for u in inner)
+        x1 = max(u.x1 for u in inner)
+        if any(x0 - ctx.x_tol < u.bbox.cx < x1 + ctx.x_tol for u in outside):
+            continue
+        return rows, outside
+    return None, list(units)
+
+
 def _widest_automatic_space(ctx: ParseContext) -> float:
     """The widest gap TeX's own inter-atom glue can produce: a thick space, 5/18 quad.
 

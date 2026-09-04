@@ -56,6 +56,11 @@ def attach(units: list[Unit], ctx: ParseContext, parse_group: ParseGroup,
             (above if u.baseline > op.baseline else below).append((j, u))
         if not above and not below:
             continue
+        # A limit is centred on the operator and can be much wider than it, so only its
+        # middle passes the centring test; the rest of the limit is found by following
+        # the baseline outward from that seed.
+        above = _extend_limit(above, units, consumed, op, ctx, upward=True)
+        below = _extend_limit(below, units, consumed, op, ctx, upward=False)
         for j, _ in above + below:
             consumed.add(j)
         upper = _pack([u for _, u in above], ctx.superscript(), parse_group)
@@ -68,6 +73,37 @@ def attach(units: list[Unit], ctx: ParseContext, parse_group: ParseGroup,
             continue
         out.append(built.get(i, u))
     return out
+
+
+def _extend_limit(seeds: list[tuple[int, Unit]], units: list[Unit],
+                  consumed: set[int], op: Unit, ctx: ParseContext,
+                  upward: bool) -> list[tuple[int, Unit]]:
+    """Grow a limit outward along its own baseline from the units already claimed."""
+    if not seeds:
+        return seeds
+    claimed = {j for j, _ in seeds}
+    baseline = seeds[0][1].baseline
+    gap = 5.0 / 18.0 * (ctx.params.quad or ctx.size)     # a thick space
+    changed = True
+    while changed:
+        changed = False
+        members = [u for j, u in seeds]
+        left = min(u.x0 for u in members)
+        right = max(u.x1 for u in members)
+        for j, u in enumerate(units):
+            if j in claimed or j in consumed or u is op:
+                continue
+            if abs(u.baseline - baseline) > ctx.baseline_tol:
+                continue
+            if u.size > op.size + ctx.eps:
+                continue
+            if u.bbox.overlap_y(op.bbox) > 0:
+                continue
+            if left - gap <= u.x1 and u.x0 <= right + gap:
+                seeds.append((j, u))
+                claimed.add(j)
+                changed = True
+    return sorted(seeds)
 
 
 def _is_limit_of(u: Unit, op: Unit, ctx: ParseContext) -> bool:

@@ -48,15 +48,13 @@ from the same source objects — never from the PDF:
 ```
                           milestone   extended   random, held-out seeds
 glyph recovery              100.000%   100.000%   100.000%
-structural edges            100.000%   100.000%    90.4% - 92.5%
-node accuracy               100.000%   100.000%    96.9% - 97.4%
-exact expressions           100.000%   100.000%    91.7% - 94.3%
+structural edges            100.000%   100.000%    92.7% - 97.7%
+node accuracy               100.000%   100.000%    97.7% - 99.3%
+exact expressions           100.000%   100.000%    94.0% - 97.7%
 ```
 
-The random figures are from seeds the parser was never tuned against (7, 11, 23). On the
-seed that was used during development it scores 96.75%, and the three-point gap between
-those numbers is the honest measure of how much of the tuning generalises. `pdfmath
-benchmark --suite all --seed N` reproduces any of them.
+The random figures are from three seeds the parser was never tuned against (7, 11, 23),
+n=300 each. `pdfmath benchmark --suite all --seed N` reproduces any of them.
 
 And on real documents it holds up. Thirty pages of three arXiv preprints from 1991, 1992
 and 2002 — Computer Modern and AMS fonts, essentially no usable ToUnicode maps:
