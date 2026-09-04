@@ -101,6 +101,24 @@ class MathNode:
                 return n
         return None
 
+    # -- confidence -----------------------------------------------------------------
+    def structural_confidence(self) -> float:
+        """The weakest *structural* inference in this subtree.
+
+        Deliberately excludes :class:`Space`, whose confidence measures something else:
+        how cleanly a gap lands on one of TeX's glue widths.  A real paper is full of
+        ``\\hskip``, ``\\phantom`` and stretched alignment glue that no inter-atom table
+        explains, and letting that drag down the score for a perfectly recovered
+        fraction would make the number useless.
+        """
+        return min((n.prov.confidence for n in self.walk()
+                    if not isinstance(n, Space)), default=1.0)
+
+    def spacing_confidence(self) -> float:
+        """How well the gaps between atoms are accounted for by TeX's glue table."""
+        return min((n.prov.confidence for n in self.walk()
+                    if isinstance(n, Space)), default=1.0)
+
     # -- comparison ---------------------------------------------------------------
     def signature(self) -> Any:
         """A canonical, provenance-free form for comparing against ground truth."""

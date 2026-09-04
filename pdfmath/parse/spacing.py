@@ -90,8 +90,27 @@ class SpaceObservation:
 
     @property
     def is_clean(self) -> bool:
-        """Within a quarter of a mu of an exact TeX space."""
+        """Within a quarter of a mu of one of the four automatic glue widths."""
         return abs(self.residual_mu) <= 0.25
+
+    @property
+    def is_integral_mu(self) -> bool:
+        """Within a third of a mu of a whole number of mu.
+
+        Author-level spaces are all specified in whole mu -- ``\\,`` is 3, ``\\;`` is 5,
+        ``\\quad`` is 18, ``\\!`` is -3 -- so landing on an integer is evidence that the
+        gap was asked for rather than accumulated.
+        """
+        return abs(self.gap_mu - round(self.gap_mu)) <= 1.0 / 3.0
+
+    @property
+    def author_space(self) -> Optional[str]:
+        """The ``\\``-command that would produce this gap, if one would."""
+        named = {-3: "\\!", 3: "\\,", 4: "\\:", 5: "\\;", 18: "\\quad",
+                 36: "\\qquad"}
+        if not self.is_integral_mu:
+            return None
+        return named.get(int(round(self.gap_mu)))
 
 
 def observe(gap_pt: float, ctx: ParseContext) -> SpaceObservation:

@@ -34,8 +34,9 @@ from ..tree.nodes import (Fraction, MathNode, Overline, Provenance, Radical, Row
 from . import (accents, axis, delimiters, fractions, matrices, operators,
                radicals, rows, scripts)
 from .style import numerator_style_of, style_for_size, style_from_rule_thickness
-from .context import Explanation, ParseContext, Trace
-from .units import (FRACTION_BAR, OVERLINE, UNDERLINE, GlyphRun, Unit, merge_runs)
+from .context import Explanation, ParseContext, Trace, infer_math_sizes
+from .units import (FRACTION_BAR, OVERLINE, UNDERLINE, UNUSED, GlyphRun, Unit,
+                    merge_runs)
 
 
 # --------------------------------------------------------------------------- helpers
@@ -136,7 +137,7 @@ def _build_units(runs: list[GlyphRun], rls: list[Rule], ctx: ParseContext) -> li
 
     while True:
         anchors = _find_anchors(remaining_runs, remaining_rules, ctx)
-        anchors = [a for a in anchors if a.kind != "unclassified"]
+        anchors = [a for a in anchors if a.kind not in (UNUSED, "unclassified")]
         if not anchors:
             break
         # Maximal by inclusion: the outermost structure claims the most material.
@@ -168,11 +169,18 @@ def _build_units(runs: list[GlyphRun], rls: list[Rule], ctx: ParseContext) -> li
 def _orphan_rule_unit(r: Rule, ctx: ParseContext) -> Unit:
     """A rule nothing claimed.  Kept as an Unknown rather than dropped."""
     from ..tree.nodes import Unknown
+    thick = r.thickness > 4 * ctx.rule_thickness
     node = Unknown(text="", glyph="rule",
-                   reason="horizontal rule with no material above or below")
+                   reason=("filled box, too thick to be a mathematical rule"
+                           if thick else
+                           "horizontal rule with no material above or below it"))
     node.prov = Provenance([], [r.id], r.bbox, 0.3,
                            {"thickness_pt": round(r.thickness, 5),
-                            "width_pt": round(r.width, 5)}, "orphan-rule")
+                            "width_pt": round(r.width, 5),
+                            "expected_rule_thickness_pt": round(ctx.rule_thickness, 5),
+                            "orientation": "horizontal" if r.is_horizontal
+                                           else ("vertical" if r.is_vertical else "other")},
+                           "orphan-rule")
     return Unit.composite(node, r.y_center, r.bbox, ctx.size, [], [r.id])
 
 
@@ -240,7 +248,8 @@ def _build_radical(a: _Anchor, ctx: ParseContext) -> Optional[Unit]:
     if not radicand_runs and not a.claim_rules:
         return None
 
-    own = style_for_size(surd.head.size, ctx.text_size, prefer=ctx.style)
+    own = style_for_size(surd.head.size, ctx.text_size, prefer=ctx.style,
+                         math_sizes=ctx.math_sizes)
     rctx = ctx._with(own).cramped()
     rad_node, rad_units = _parse_group(radicand_runs, a.claim_rules, rctx)
     rad_box = BBox.union([u.bbox for u in rad_units]) if rad_units else None
@@ -363,8 +372,12 @@ def parse(glyphs: Sequence[Glyph], rls: Sequence[Rule],
     """
     if ctx is None:
         sizes = [g.size for g in glyphs]
-        ctx = ParseContext(text_size=max(sizes) if sizes else 10.0,
-                           style=Style.DISPLAY, trace=Trace())
+        levels = infer_math_sizes(sizes)
+        ctx = ParseContext(text_size=levels[0], style=Style.DISPLAY, trace=Trace(),
+                           math_sizes=levels)
+    elif ctx.math_sizes is None:
+        ctx.math_sizes = infer_math_sizes([g.size for g in glyphs])
+        ctx._params = None
     runs = merge_runs(list(glyphs), tol=max(0.05, 0.005 * ctx.text_size))
     units = _build_units(runs, list(rls), ctx)
     return parse_units(units, ctx), ctx

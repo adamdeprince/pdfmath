@@ -69,10 +69,11 @@ def cmd_debug_svg(args: argparse.Namespace) -> int:
     tree = None
     if not args.no_parse:
         src = page.in_region(region) if region else page
+        from ..parse.context import infer_math_sizes
+        levels = infer_math_sizes([g.size for g in src.glyphs])
         tree, _ = parse(src.glyphs, src.rules,
-                        ParseContext(text_size=max((g.size for g in src.glyphs),
-                                                   default=10.0),
-                                     style=_style(args.style), trace=Trace()))
+                        ParseContext(text_size=levels[0], style=_style(args.style),
+                                     trace=Trace(), math_sizes=levels))
     opts = SvgOptions(scale=args.scale)
     out = render(page, region, tree, opts, as_html=args.html,
                  title=f"{args.pdf} page {args.page}")
@@ -87,8 +88,10 @@ def cmd_debug_svg(args: argparse.Namespace) -> int:
 
 def _parse_region(page, region: Optional[BBox], style: Style):
     src = page.in_region(region) if region else page
-    ctx = ParseContext(text_size=max((g.size for g in src.glyphs), default=10.0),
-                       style=style, trace=Trace())
+    from ..parse.context import infer_math_sizes
+    levels = infer_math_sizes([g.size for g in src.glyphs])
+    ctx = ParseContext(text_size=levels[0], style=style, trace=Trace(),
+                       math_sizes=levels)
     tree, ctx = parse(src.glyphs, src.rules, ctx)
     return src, tree, ctx
 
@@ -108,10 +111,12 @@ def cmd_extract(args: argparse.Namespace) -> int:
         equations = []
         for r in regions:
             src, tree, ctx = _parse_region(page, r.bbox, style)
-            conf = min([n.prov.confidence for n in tree.walk()] or [1.0])
             entry: dict[str, Any] = {
                 "bbox": [round(v, 4) for v in r.bbox.as_list()],
-                "confidence": round(min(conf, r.confidence), 6),
+                "confidence": round(min(tree.structural_confidence(),
+                                        r.confidence), 6),
+                "spacing_confidence": round(tree.spacing_confidence(), 6),
+                "detection_confidence": round(r.confidence, 6),
                 "detection": r.evidence,
                 "glyph_count": len(src.glyphs),
                 "rule_count": len(src.rules),
@@ -121,6 +126,10 @@ def cmd_extract(args: argparse.Namespace) -> int:
                                             include_provenance=args.provenance)
             if args.tree:
                 entry["tree"] = tree.to_json()
+            if args.lg:
+                from ..mathml.lgeval import to_label_graph
+                entry["label_graph"] = to_label_graph(
+                    tree, f"pdfmath page {page.page} bbox {entry['bbox']}")
             if args.explain:
                 from ..debug.explain import explain_tree
                 entry["explanations"] = explain_tree(tree, ctx, min_confidence=1.01)
@@ -177,7 +186,10 @@ def cmd_benchmark(args: argparse.Namespace) -> int:
                                    GenConfig(max_depth=args.max_depth))))
     reports = {}
     for name, corpus in suites:
-        report = run(corpus, workdir=args.workdir, size=args.size)
+        report = run(corpus, workdir=args.workdir, size=args.size,
+                     keep=bool(args.lg_dir))
+        if args.lg_dir:
+            _write_label_graphs(args.lg_dir, name, corpus, report)
         reports[name] = report
         if not args.json:
             print(f"=== {name} " + "=" * max(0, 50 - len(name)))
@@ -187,6 +199,134 @@ def cmd_benchmark(args: argparse.Namespace) -> int:
         print(json.dumps({k: v.to_json() for k, v in reports.items()},
                          indent=2, ensure_ascii=False))
     return 0 if all(r.exact >= args.threshold for r in reports.values()) else 1
+
+
+def cmd_survey(args: argparse.Namespace) -> int:
+    """Triage a real document: what was found, how sure we are, what is unresolved.
+
+    This is the second-milestone workflow in one command.  It does not need ground
+    truth, because the things worth looking at first do not: a glyph that never reached
+    the tree, an ``Unknown`` node, a structural inference below the confidence floor.
+    Each of those is a lead, and the intended next step is to reproduce it as a
+    *synthetic* case rather than to special-case the document.
+    """
+    from ..detection.equations import find_displayed_equations
+    from ..tree.nodes import Space, Unknown
+
+    style = _style(args.style)
+    pages = list(extract_pages(args.pdf, args.pages))
+    rows: list[dict[str, Any]] = []
+    totals = {"equations": 0, "glyphs": 0, "glyphs_in_tree": 0, "unknown_nodes": 0,
+              "low_confidence_nodes": 0}
+    weakest: dict[str, int] = {}
+
+    for page in pages:
+        for region in find_displayed_equations(page):
+            src, tree, ctx = _parse_region(page, region.bbox, style)
+            in_tree = {g for n in tree.walk() for g in n.prov.glyph_ids}
+            missing = sorted({g.id for g in src.glyphs} - in_tree)
+            unknowns = [n for n in tree.walk() if isinstance(n, Unknown)]
+            weak = [n for n in tree.walk()
+                    if not isinstance(n, Space) and n.prov.rule_name
+                    and n.prov.rule_name != "leaf"
+                    and n.prov.confidence < args.floor]
+            for n in weak:
+                weakest[n.prov.rule_name] = weakest.get(n.prov.rule_name, 0) + 1
+
+            totals["equations"] += 1
+            totals["glyphs"] += len(src.glyphs)
+            totals["glyphs_in_tree"] += len(in_tree)
+            totals["unknown_nodes"] += len(unknowns)
+            totals["low_confidence_nodes"] += len(weak)
+
+            row: dict[str, Any] = {
+                "page": page.page,
+                "bbox": [round(v, 2) for v in region.bbox.as_list()],
+                "glyphs": len(src.glyphs),
+                "confidence": round(tree.structural_confidence(), 4),
+                "spacing_confidence": round(tree.spacing_confidence(), 4),
+                "unresolved_glyphs": missing,
+                "unknown_nodes": [{"id": n.node_id, "reason": n.reason}
+                                  for n in unknowns],
+                "weak_inferences": [
+                    {"id": n.node_id, "kind": n.kind, "rule": n.prov.rule_name,
+                     "confidence": round(n.prov.confidence, 4),
+                     "evidence": {k: v for k, v in n.prov.evidence.items()
+                                  if "residual" in k or "expected" in k}}
+                    for n in weak],
+            }
+            if args.mathml:
+                row["mathml"] = to_mathml(tree, indent=False)
+            rows.append(row)
+
+    summary = {
+        **totals,
+        "glyph_recovery": (round(totals["glyphs_in_tree"] / totals["glyphs"], 6)
+                           if totals["glyphs"] else 1.0),
+        "weak_inferences_by_recogniser": dict(sorted(weakest.items(),
+                                                     key=lambda kv: -kv[1])),
+        "confidence_floor": args.floor,
+    }
+    if args.json:
+        print(json.dumps({"summary": summary, "equations": rows}, indent=2,
+                         ensure_ascii=False))
+        return 0
+
+    print(f"{args.pdf}")
+    print(f"  equations              {summary['equations']}")
+    print(f"  glyph recovery         {summary['glyph_recovery'] * 100:.3f}%  "
+          f"({summary['glyphs_in_tree']}/{summary['glyphs']})")
+    print(f"  Unknown nodes          {summary['unknown_nodes']}")
+    print(f"  inferences below {args.floor:.2f}  {summary['low_confidence_nodes']}")
+    if summary["weak_inferences_by_recogniser"]:
+        print("  by recogniser:")
+        for name, n in summary["weak_inferences_by_recogniser"].items():
+            print(f"    {name:<20s} {n}")
+    print()
+    shown = 0
+    for row in sorted(rows, key=lambda r: r["confidence"]):
+        if shown >= args.show:
+            break
+        shown += 1
+        print(f"  page {row['page']} bbox {row['bbox']}  "
+              f"confidence {row['confidence']:.4f}  glyphs {row['glyphs']}")
+        for u in row["unknown_nodes"]:
+            print(f"      unknown #{u['id']}: {u['reason']}")
+        for w in row["weak_inferences"][:3]:
+            print(f"      {w['rule']} #{w['id']} at {w['confidence']:.4f}  "
+                  f"{w['evidence']}")
+        if args.mathml:
+            print(f"      {row['mathml'][:200]}")
+    return 0
+
+
+def _write_label_graphs(directory: str, suite: str, corpus, report) -> None:
+    """Write matching ground-truth and output label graphs for LgEval.
+
+    Two files per expression, named so that LgEval's ``evaluate`` can pair them.  The
+    ground truth is written from the generating expression, never from the PDF, so the
+    same files also serve as ground truth for any other system run on the same corpus.
+    """
+    import os
+
+    from ..mathml.lgeval import to_label_graph
+    from ..parse.driver import parse
+
+    gt_dir = os.path.join(directory, suite, "ground_truth")
+    out_dir = os.path.join(directory, suite, "output")
+    os.makedirs(gt_dir, exist_ok=True)
+    os.makedirs(out_dir, exist_ok=True)
+    for i, (expr, case) in enumerate(zip(corpus, report.cases)):
+        stem = f"{suite}_{i:05d}.lg"
+        if case.tree is not None:
+            with open(os.path.join(out_dir, stem), "w") as fh:
+                fh.write(to_label_graph(case.tree, case.tex))
+        if case.extract is not None:
+            truth, _ = parse(case.extract.glyphs, case.extract.rules)
+            with open(os.path.join(gt_dir, stem), "w") as fh:
+                fh.write("# ground truth is the generating expression, not a parse\n"
+                         f"# {case.tex}\n" + to_label_graph(truth, ""))
+    print(f"wrote label graphs for {suite} to {directory}", file=sys.stderr)
 
 
 def cmd_fonts(args: argparse.Namespace) -> int:
@@ -261,6 +401,9 @@ def build_parser() -> argparse.ArgumentParser:
     add_common(e)
     e.add_argument("--mathml", action="store_true", help="print MathML only")
     e.add_argument("--tree", action="store_true", help="include the full tree")
+    e.add_argument("--lg", action="store_true",
+                   help="include an LgEval label graph, for comparison against "
+                        "CROHME/MathSeer tooling")
     e.add_argument("--json", action="store_true", help="force JSON output")
     e.add_argument("--explain", action="store_true", help="include the decision trace")
     e.add_argument("--provenance", action="store_true",
@@ -288,7 +431,24 @@ def build_parser() -> argparse.ArgumentParser:
                    help="exit non-zero if exact-expression accuracy falls below this")
     b.add_argument("--verbose", action="store_true")
     b.add_argument("--json", action="store_true")
+    b.add_argument("--lg-dir", default=None,
+                   help="also write LgEval label graphs here, for comparison against "
+                        "CROHME/MathSeer tooling")
     b.set_defaults(func=cmd_benchmark)
+
+    v = sub.add_parser("survey", help="triage a real document")
+    v.add_argument("pdf")
+    v.add_argument("--pages", type=int, nargs="*", default=None,
+                   help="1-based page numbers; default every page")
+    v.add_argument("--style", default="display",
+                   choices=["display", "text", "script", "scriptscript"])
+    v.add_argument("--floor", type=float, default=0.9,
+                   help="report structural inferences below this confidence")
+    v.add_argument("--show", type=int, default=8,
+                   help="how many of the weakest equations to print")
+    v.add_argument("--mathml", action="store_true")
+    v.add_argument("--json", action="store_true")
+    v.set_defaults(func=cmd_survey)
 
     f = sub.add_parser("fonts", help="what we know about a TeX font")
     f.add_argument("font", help="a PDF font name, e.g. CMMI10 or ABCDEF+CMSY7")

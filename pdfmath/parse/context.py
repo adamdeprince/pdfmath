@@ -61,6 +61,11 @@ class ParseContext:
     extension_family: str = "cmex"
     trace: Trace = field(default_factory=Trace)
     depth: int = 0
+    #: The sizes of text, script and scriptscript style, in points.  Read off the page
+    #: where possible rather than assumed: LaTeX's \DeclareMathSizes gives 10/7/5 in a
+    #: 10 pt document but 12/8/6 in a 12 pt one, and applying the wrong ratio puts every
+    #: predicted script shift about a point out.
+    math_sizes: Optional[tuple[float, float, float]] = None
 
     _params: Optional[MathParams] = field(default=None, repr=False)
 
@@ -68,18 +73,29 @@ class ParseContext:
     def params(self) -> MathParams:
         if self._params is None:
             self._params = params_for(self.style, self.text_size,
-                                      self.symbol_family, self.extension_family)
+                                      self.symbol_family, self.extension_family,
+                                      size=self.size)
         return self._params
 
     @property
     def size(self) -> float:
         """Font size of the current style, in points."""
-        return self.text_size * self.style.size_ratio
+        return self.size_of(self.style)
+
+    def size_of(self, style: Style) -> float:
+        if self.math_sizes is None:
+            return self.text_size * style.size_ratio
+        if style < Style.SCRIPT:
+            return self.math_sizes[0]
+        if style < Style.SCRIPTSCRIPT:
+            return self.math_sizes[1]
+        return self.math_sizes[2]
 
     # -- derived contexts -----------------------------------------------------------
     def _with(self, style: Style) -> "ParseContext":
         return ParseContext(self.text_size, style, self.symbol_family,
-                            self.extension_family, self.trace, self.depth + 1)
+                            self.extension_family, self.trace, self.depth + 1,
+                            self.math_sizes)
 
     def numerator(self) -> "ParseContext":  return self._with(self.style.numerator_style())
     def denominator(self) -> "ParseContext": return self._with(self.style.denominator_style())
@@ -123,6 +139,29 @@ class ParseContext:
     def x_tol(self) -> float:
         """Horizontal slack when testing containment inside a rule's span."""
         return max(0.1, 0.02 * self.text_size)
+
+
+def infer_math_sizes(sizes: Sequence[float]) -> tuple[float, float, float]:
+    """Recover (text, script, scriptscript) sizes from the sizes actually on the page.
+
+    TeX only ever sets a formula at three sizes, and they are well separated, so the
+    distinct sizes present -- clustered to absorb pdfTeX's rounding -- give them
+    directly.  When an expression has no scripts there is nothing to read and the 10 pt
+    ratios stand in.
+    """
+    if not sizes:
+        return (10.0, 7.0, 5.0)
+    ordered = sorted(sizes, reverse=True)
+    levels: list[float] = [ordered[0]]
+    for s in ordered[1:]:
+        if s < levels[-1] * 0.95:
+            levels.append(s)
+        if len(levels) == 3:
+            break
+    text = levels[0]
+    script = levels[1] if len(levels) > 1 else text * 0.7
+    ss = levels[2] if len(levels) > 2 else script * (5.0 / 7.0)
+    return (text, script, ss)
 
 
 def infer_text_size(sizes: Sequence[float]) -> float:

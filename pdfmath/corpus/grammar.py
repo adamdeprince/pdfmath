@@ -29,8 +29,18 @@ _NEEDS_BRACES = ("Sup", "Sub", "SubSup", "Seq", "BigOp")
 
 
 def _base_tex(e: "Expr") -> str:
+    """A script base, braced where TeX needs it.
+
+    The leading ``{}`` is not decoration.  TeX (*The TeXbook* / tex.web 1186) replaces
+    an Ord noad by an accent noad when a group turns out to contain nothing but one, so
+    ``{\\hat{u}_{10}}_{a}`` collapses to a single accent that already has a subscript
+    and raises "Double subscript".  An empty Ord in front makes the group two noads, so
+    the collapse does not apply.  It is exactly layout-neutral: an empty Ord has zero
+    width and Ord-Ord spacing is zero, and a compiled comparison confirms every glyph
+    lands in the same place.
+    """
     t = e.to_tex()
-    return "{" + t + "}" if type(e).__name__ in _NEEDS_BRACES else t
+    return "{{}" + t + "}" if type(e).__name__ in _NEEDS_BRACES else t
 
 
 def _row_sig(parts: Sequence[Sig]) -> Sig:

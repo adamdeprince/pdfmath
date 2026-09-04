@@ -46,14 +46,32 @@ On synthetic corpora, compiled with pdfTeX and checked against ground truth gene
 from the same source objects — never from the PDF:
 
 ```
-                          milestone   extended   random (n=400)
-glyph recovery              100.000%   100.000%      100.000%
-structural edges            100.000%   100.000%       93.981%
-node accuracy               100.000%   100.000%       98.095%
-exact expressions           100.000%   100.000%       96.750%
+                          milestone   extended   random, held-out seeds
+glyph recovery              100.000%   100.000%   100.000%
+structural edges            100.000%   100.000%    90.4% - 92.5%
+node accuracy               100.000%   100.000%    96.9% - 97.4%
+exact expressions           100.000%   100.000%    91.7% - 94.3%
 ```
 
-`pdfmath benchmark` reproduces all three.
+The random figures are from seeds the parser was never tuned against (7, 11, 23). On the
+seed that was used during development it scores 96.75%, and the three-point gap between
+those numbers is the honest measure of how much of the tuning generalises. `pdfmath
+benchmark --suite all --seed N` reproduces any of them.
+
+And on real documents it holds up. Thirty pages of three arXiv preprints from 1991, 1992
+and 2002 — Computer Modern and AMS fonts, essentially no usable ToUnicode maps:
+
+```
+210 displayed equations detected and decompiled
+100.000%  glyph recovery (10776/10776); no glyph silently dropped
+  0.916   median structural confidence
+     22   Unknown nodes -- kept, with their geometry, rather than guessed at
+ 99.93%   of glyphs identified from the TeX font encoding, not from PDF Unicode metadata
+```
+
+That last line is the one that matters. Those documents mostly do not carry the metadata a
+Unicode-first extractor needs; knowing that `CMMI10 + 0x78` is `x` is what makes them
+readable at all. `pdfmath survey paper.pdf` produces the report.
 
 ## Quickstart
 

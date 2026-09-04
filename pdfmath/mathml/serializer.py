@@ -127,9 +127,14 @@ class MathMLWriter:
 
     def _r_Operator(self, n: Operator, d: int) -> str:
         a = self._prov_attrs(n)
-        v = self._variant_attr(n, "mo")
-        if v:
-            a["mathvariant"] = v
+        # A variant is only meaningful for letter-like content.  TeX draws the maths
+        # comma and the "less" sign from cmmi, but that says where the glyph lives, not
+        # that the punctuation is italic, and asserting mathvariant="italic" on an <mo>
+        # would change how a renderer treats it.
+        if n.text and any(c.isalpha() for c in n.text):
+            v = self._variant_attr(n, "mo")
+            if v:
+                a["mathvariant"] = v
         return self._tag("mo", a, escape(n.text), d)
 
     def _r_Text(self, n: Text, d: int) -> str:

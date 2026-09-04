@@ -27,7 +27,8 @@ from ..fonts.mathparams import Style
 from ..geometry.bbox import BBox
 from . import blocks
 from .context import ParseContext
-from .units import FRACTION_BAR, OVERLINE, UNDERLINE, ClassifiedRule, GlyphRun
+from .units import (FRACTION_BAR, OVERLINE, UNDERLINE, UNUSED,
+                    ClassifiedRule, GlyphRun)
 
 
 def _candidates(rule: Rule, runs: Sequence[GlyphRun], rules: Sequence[Rule],
@@ -39,7 +40,12 @@ def _candidates(rule: Rule, runs: Sequence[GlyphRun], rules: Sequence[Rule],
     below: list[Any] = []
     for r in runs:
         b = r.bbox
-        if not (span.x0 - pad <= b.cx <= span.x1 + pad):
+        # Containment, not centring.  Rule 15 packs each part into a box centred on the
+        # bar and makes the bar as wide as the wider one, so every glyph of a numerator
+        # or denominator lies *inside* the bar's span.  Testing only the centre lets a
+        # narrow bar -- a fraction in a script, say -- claim a wide operator centred
+        # beneath it.
+        if not span.contains_x(b, pad):
             continue
         (above if b.cy > span.y1 else below).append(r)
     for o in rules:
@@ -165,25 +171,35 @@ def classify_rule(rule: Rule, runs: Sequence[GlyphRun], other_rules: Sequence[Ru
     claims them first, by the surd they touch.)  It is never a minus sign: ``-`` is
     cmsy's ``minus`` *glyph*, so the classic OCR confusion does not arise at all.
     """
-    num_r, den_r, num_l, den_l = claim(rule, runs, other_rules, ctx)
-    above = num_r + num_l
-    below = den_r + den_l
-
     ev: dict[str, Any] = {
         "rule_width_pt": round(rule.width, 4),
         "rule_thickness_pt": round(rule.thickness, 5),
         "expected_default_rule_thickness_pt": round(ctx.rule_thickness, 5),
         "thickness_residual_pt": round(rule.thickness - ctx.rule_thickness, 5),
-        "n_above": len(above),
-        "n_below": len(below),
     }
+    # TeX draws every fraction bar, overline and underline at default_rule_thickness,
+    # and \arrayrulewidth is the same order.  A "rule" several times thicker is a filled
+    # box from a figure, not a mathematical line -- real papers are full of them -- and
+    # calling it a fraction bar would invent a fraction out of a diagram.  It is left
+    # unclassified, which keeps it in the output as an Unknown with its geometry.
+    if rule.thickness > 4 * ctx.rule_thickness:
+        ev["rejected"] = ("thickness is more than four times default_rule_thickness: "
+                          "a filled box, not a mathematical rule")
+        return ClassifiedRule(rule, UNUSED, ev, 0.1)
+
+    num_r, den_r, num_l, den_l = claim(rule, runs, other_rules, ctx)
+    above = num_r + num_l
+    below = den_r + den_l
+    ev["n_above"] = len(above)
+    ev["n_below"] = len(below)
     if above and below:
         return ClassifiedRule(rule, FRACTION_BAR, ev, 1.0)
     if below and not above:
         return ClassifiedRule(rule, OVERLINE, ev, 1.0)
     if above and not below:
         return ClassifiedRule(rule, UNDERLINE, ev, 1.0)
-    return ClassifiedRule(rule, FRACTION_BAR, ev, 0.2)
+    ev["rejected"] = "no material above or below the rule in its own column"
+    return ClassifiedRule(rule, UNUSED, ev, 0.2)
 
 
 def verify(rule: Rule, num_baseline: Optional[float], den_baseline: Optional[float],

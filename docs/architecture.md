@@ -191,6 +191,16 @@ Each of these is a real failure with a known cause, not a mystery.
    metrics from the PDF's `/Widths`. Structure recovery still works but the residuals stop
    being meaningful.
 
+## Comparison with MathSeer
+
+`docs/comparison.md` states the hypothesis the project is meant to test, what has been
+established, what has not, and a runnable protocol using DPRL's own LgEval. The short
+version: the evidence the hypothesis depends on has been shown to exist and to be exact,
+and the system built on it reconstructs the constrained corpus perfectly and real 1990s
+papers with 100% glyph recovery — but QD-GGA has not been run here, so no comparative
+number is claimed. `pdfmath benchmark --lg-dir` and `pdfmath extract --lg` emit label
+graphs so that a reader with the MathSeer stack can run the comparison.
+
 ## Extending it
 
 The workflow, in order:

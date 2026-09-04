@@ -146,7 +146,7 @@ def attach(units: list[Unit], ctx: ParseContext, parse_group: ParseGroup,
     out: list[Unit] = []
     i = 0
     n = len(units)
-    expected = ctx.size * (ctx.style.sup_style().size_ratio / ctx.style.size_ratio)
+    expected = ctx.size_of(ctx.style.sup_style())
     tol = max(0.1, 0.02 * ctx.text_size)
     # Returning to the row means returning to the row's *size* as well as its baseline.
     # A script nested two levels deep can land within rounding distance of the row
@@ -271,15 +271,56 @@ def _pack(group: list[Unit], ctx: ParseContext,
     return Unit.composite(node, baseline, box, max(u.size for u in group), gids, rids)
 
 
+def _candidate_styles(ctx: ParseContext) -> list[ParseContext]:
+    """Styles that could have produced a script at this size.
+
+    Display, text and their cramped variants all use the same font size and differ only
+    in ``clr`` -- ``sup1`` against ``sup2`` against ``sup3``.  When a region is handed to
+    us out of context (a bbox on a page, rather than a corpus expression we compiled) we
+    do not know which applied, so all of them are tried and the one that explains the
+    measurement is reported.  That is inference from evidence, not a fallback: the winner
+    is recorded as ``style_fit`` and its residual is what sets the confidence.
+    """
+    from ..fonts.mathparams import Style
+    if ctx.style < Style.SCRIPT:
+        candidates = [Style.DISPLAY, Style.DISPLAY_CRAMPED,
+                      Style.TEXT, Style.TEXT_CRAMPED]
+    elif ctx.style < Style.SCRIPTSCRIPT:
+        candidates = [Style.SCRIPT, Style.SCRIPT_CRAMPED]
+    else:
+        candidates = [Style.SCRIPTSCRIPT, Style.SCRIPTSCRIPT_CRAMPED]
+    ordered = [ctx.style] + [c for c in candidates if c != ctx.style]
+    return [ctx if c == ctx.style else ctx._with(c) for c in ordered]
+
+
+def _fit_style(base: Unit, sup: Optional[Unit], sub: Optional[Unit],
+               ctx: ParseContext) -> tuple[ParseContext, Optional[float],
+                                           Optional[float], float]:
+    """(context, shift_up, shift_down, worst residual) for the best-fitting style."""
+    best = None
+    for cand in _candidate_styles(ctx):
+        up, down = predict_shifts(base, sup, sub, cand)
+        worst = 0.0
+        if sup is not None and up is not None:
+            worst = max(worst, abs((sup.baseline - base.baseline) - up))
+        if sub is not None and down is not None:
+            worst = max(worst, abs((base.baseline - sub.baseline) - down))
+        if best is None or worst < best[3] - 1e-9:
+            best = (cand, up, down, worst)
+    assert best is not None
+    return best
+
+
 def _build(base: Unit, sup: Optional[Unit], sub: Optional[Unit],
            ctx: ParseContext) -> Unit:
-    pred_up, pred_down = predict_shifts(base, sup, sub, ctx)
+    fitted, pred_up, pred_down, _ = _fit_style(base, sup, sub, ctx)
+    ctx = fitted
     ev: dict[str, Any] = {
         "base_is_char": base.is_char,
         "style": ctx.style.name,
+        "style_fit": ctx.style.name,
         "font_size_base_pt": round(base.size, 4),
-        "expected_script_size_ratio": round(ctx.style.sup_style().size_ratio
-                                            / ctx.style.size_ratio, 4),
+        "script_size_pt": round(ctx.size_of(ctx.style.sup_style()), 4),
     }
     conf = 1.0
     if sup is not None:

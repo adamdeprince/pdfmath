@@ -30,11 +30,18 @@ _SIZE_RATIOS = [(Style.DISPLAY, 1.0), (Style.TEXT, 1.0),
 
 
 def style_for_size(size: float, text_size: float,
-                   prefer: Optional[Style] = None) -> Style:
+                   prefer: Optional[Style] = None,
+                   math_sizes: Optional[tuple[float, float, float]] = None) -> Style:
     """The style whose font size is ``size``.
 
     ``prefer`` breaks the display/text tie, which font size alone cannot.
     """
+    if math_sizes is not None:
+        pairs = list(zip((Style.TEXT, Style.SCRIPT, Style.SCRIPTSCRIPT), math_sizes))
+        best = min(pairs, key=lambda sp: abs(sp[1] - size))
+        if best[0] is Style.TEXT and prefer is not None and prefer.is_display:
+            return Style.DISPLAY
+        return best[0]
     ratio = size / max(text_size, 1e-6)
     best = min(_SIZE_RATIOS[1:], key=lambda sr: abs(sr[1] - ratio))
     if best[0] is Style.TEXT and prefer is not None and prefer.is_display:

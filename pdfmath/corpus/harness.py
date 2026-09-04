@@ -20,7 +20,7 @@ from typing import Any, Iterable, Optional, Sequence
 from ..extraction.model import PageExtract
 from ..extraction.pdfminer_backend import extract_pages
 from ..fonts.mathparams import Style
-from ..parse.context import ParseContext, Trace
+from ..parse.context import ParseContext, Trace, infer_math_sizes
 from ..parse.driver import parse
 from ..tree.nodes import MathNode, Space, Unknown
 from .compile import CompiledCorpus, compile_expressions
@@ -249,10 +249,11 @@ def run_compiled(corpus: CompiledCorpus, expressions: Sequence[Expr],
             report.cases.append(_error_case(i, tex, expected, "page missing", expr))
             continue
         try:
+            levels = infer_math_sizes([g.size for g in page.glyphs])
             ctx = ParseContext(
-                text_size=max((g.size for g in page.glyphs), default=10.0),
+                text_size=levels[0],
                 style=style or (Style.DISPLAY if display else Style.TEXT),
-                trace=Trace())
+                trace=Trace(), math_sizes=levels)
             tree, ctx = parse(page.glyphs, page.rules, ctx)
         except Exception as exc:                      # a parser crash is a test failure
             report.cases.append(_error_case(

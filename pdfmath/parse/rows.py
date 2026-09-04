@@ -110,6 +110,23 @@ def merge_leaves(units: list[Unit], ctx: ParseContext) -> list[Unit]:
                 out.append(_join(group, Number, ctx, "digit-run"))
                 i = j
                 continue
+        elif isinstance(node, Operator) and node.text in (".", "⋅"):
+            # \ldots and \cdots are three separate glyphs in the PDF -- plain TeX
+            # defines them as three \ldotp / \cdotp atoms -- and MathML wants one
+            # token.  Three or more on a baseline, evenly spaced, is an ellipsis.
+            j = i + 1
+            group = [u]
+            while j < len(units) and isinstance(units[j].node, Operator) \
+                    and units[j].node.text == node.text \
+                    and abs(units[j].baseline - u.baseline) <= ctx.baseline_tol \
+                    and units[j].x0 - group[-1].x1 <= 0.45 * ctx.size:
+                group.append(units[j])
+                j += 1
+            if len(group) >= 3:
+                out.append(_join_text(group, "…" if node.text == "." else "⋯",
+                                      ctx, "ellipsis"))
+                i = j
+                continue
         elif isinstance(node, Identifier) and _is_upright_roman(u):
             j = i + 1
             group = [u]
@@ -143,6 +160,20 @@ def _adjacent(a: Unit, b: Unit, ctx: ParseContext) -> bool:
         return False
     gap = b.x0 - a.x1
     return -0.3 * ctx.size <= gap <= 0.02 * ctx.size
+
+
+def _join_text(group: list[Unit], text: str, ctx: ParseContext, why: str) -> Unit:
+    """Replace a run of glyphs with a single token of different text."""
+    first = group[0].node
+    node = Operator(text=text, glyph=None, font=getattr(first, "font", None),
+                    mathvariant="normal", atom="Inner")
+    gids = sorted({g for u in group for g in u.glyph_ids})
+    box = BBox.union([u.bbox for u in group])
+    node.prov = Provenance(gids, [], box, 0.98,
+                           {"merged_from": [getattr(u.node, "text", "") for u in group],
+                            "reason": why}, why)
+    return Unit.composite(node, group[0].baseline, box, group[0].size, gids, [],
+                          x0=group[0].x0, x1=group[-1].x1)
 
 
 def _join(group: list[Unit], cls, ctx: ParseContext, why: str) -> Unit:
@@ -196,6 +227,8 @@ def build(units: list[Unit], ctx: ParseContext) -> MathNode:
                 "nearest_tex_space": obs.name,
                 "nearest_tex_space_mu": obs.nearest_mu,
                 "residual_mu": round(obs.residual_mu, 3),
+                "integral_mu": obs.is_integral_mu,
+                "author_space": obs.author_space,
                 "math_quad_pt": round(obs.quad_pt, 4),
                 "left_atom": left.short,
                 "right_atom": right.short,
@@ -210,9 +243,14 @@ def build(units: list[Unit], ctx: ParseContext) -> MathNode:
             if (not ev["atom_classes_consistent"] and obs.gap_pt > 0.02 * ctx.size
                     and obs.nearest_class != spacing.NONE):
                 sp = Space(width_em=obs.gap_pt / max(ctx.size, 1e-6))
-                sp.prov = Provenance([], [], None, 0.9, dict(ev, reason=
-                    "gap not explained by TeX inter-atom glue for these atom classes"),
-                    "explicit-space")
+                # A space is a measurement, not a structural guess: how sure we are
+                # that the author asked for it is how cleanly the gap lands on one of
+                # TeX's four glue widths.
+                sp.prov = Provenance(
+                    [], [], None,
+                    0.99 if (obs.is_clean or obs.is_integral_mu) else 0.8,
+                    dict(ev, reason="gap not explained by TeX inter-atom glue for "
+                                    "these atom classes"), "explicit-space")
                 children.append(sp)
         children.append(u.node)
 

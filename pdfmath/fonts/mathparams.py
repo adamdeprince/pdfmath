@@ -57,9 +57,12 @@ class Style(IntEnum):
 
     @property
     def size_ratio(self) -> float:
-        """Font size of this style relative to the document's text size.
+        """Font size of this style relative to the text size, as a *fallback*.
 
-        These are LaTeX's ``\\DeclareMathSizes`` defaults, which are also plain TeX's.
+        These are the ratios for a 10 pt document.  They are not universal: LaTeX's
+        ``\\DeclareMathSizes`` gives 12/8/6 at 12 pt, so the script ratio there is 2/3,
+        not 7/10.  Where the sizes can be read off the page -- which is almost always --
+        :class:`~pdfmath.parse.context.ParseContext` uses those instead.
         """
         if self < Style.SCRIPT:
             return 1.0
@@ -133,7 +136,8 @@ class MathParams:
 
 
 def params_for(style: Style, text_size: float = 10.0,
-               symbol_family: str = "cmsy", extension_family: str = "cmex") -> MathParams:
+               symbol_family: str = "cmsy", extension_family: str = "cmex",
+               size: Optional[float] = None) -> MathParams:
     """Load the parameters TeX would have used for ``style`` in a ``text_size`` document.
 
     Both the family-2 and family-3 fonts are chosen at the *style's* size, following
@@ -142,7 +146,7 @@ def params_for(style: Style, text_size: float = 10.0,
     ``scriptfont3`` is cmex7, and a parser that assumed a single rule thickness would
     misjudge every nested fraction.
     """
-    size = text_size * style.size_ratio
+    size = text_size * style.size_ratio if size is None else size
     sym = _load_at(symbol_family, size)
     ext = _load_at(extension_family, size)
     return MathParams(sym, ext, size)
