@@ -29,16 +29,49 @@ ParseGroup = Callable[[list[Unit], ParseContext], MathNode]
 
 
 def split_rows(units: Sequence[Unit], ctx: ParseContext) -> list[list[Unit]]:
-    """Group units into visual rows separated by real vertical whitespace.
+    """Group units into the lines of a multi-line structure.
 
-    The gap threshold is half an x-height: smaller than any inter-row gap TeX produces
-    (``\\baselineskip`` leaves several points) and larger than the negative gap a script
-    makes with its own base, which always overlaps it.
+    *Baselines, not boxes.*  Box gaps are useless here.  A fraction in the top row of a
+    matrix hangs down close to the row beneath it, and a superscript in one row reaches
+    up past the top of the row above, so there is often no whitespace to find -- which is
+    exactly the case Baker reported as a matrix failure.  Baselines do not overlap: TeX
+    puts rows a ``\\baselineskip`` apart while a script sits a few points from its base.
+
+    *Size, not coverage.*  ``\\frac{a}{b}^2`` also has two well-separated baselines, and
+    the temptation is to reject the split because the superscript covers only a sliver of
+    the width -- but a one-column matrix has narrow rows too, and that test throws them
+    away with it.  What actually separates the two is that TeX sets a script one style
+    down: every row of a table is at the enclosing size, and a script never is.  A loose
+    coverage floor stays behind, to catch degenerate splits.
     """
-    boxes = [u.bbox for u in units]
-    gap = 0.5 * ctx.params.x_height
-    bands = vertical_bands(boxes, gap=gap)
-    return [sorted((units[i] for i in band), key=lambda u: u.x0) for band in bands]
+    if not units:
+        return []
+    tol = 0.5 * ctx.text_size
+    ordered = sorted(range(len(units)), key=lambda i: -units[i].baseline)
+    bands: list[list[int]] = [[ordered[0]]]
+    for i in ordered[1:]:
+        if units[bands[-1][-1]].baseline - units[i].baseline > tol:
+            bands.append([i])
+        else:
+            bands[-1].append(i)
+    rows = [sorted((units[i] for i in band), key=lambda u: u.x0) for band in bands]
+    if len(rows) < 2:
+        return rows
+
+    single = [sorted(units, key=lambda u: u.x0)]
+    full = max(u.size for u in units)
+    for row in rows:
+        if all(u.size < full - ctx.eps for u in row):
+            return single
+
+    x0 = min(u.x0 for u in units)
+    x1 = max(u.x1 for u in units)
+    total = max(x1 - x0, 1e-6)
+    for row in rows:
+        span = max(u.x1 for u in row) - min(u.x0 for u in row)
+        if span / total < 0.12:
+            return single
+    return rows
 
 
 def aligned_block(units: Sequence[Unit], ctx: ParseContext,
@@ -108,13 +141,13 @@ def _widest_automatic_space(ctx: ParseContext) -> float:
 
 def _columns(row: Sequence[Unit], threshold: float) -> list[list[Unit]]:
     cols: list[list[Unit]] = [[row[0]]]
-    edge = row[0].x1
+    edge = row[0].box_x1
     for u in row[1:]:
-        if u.x0 - edge > threshold:
+        if u.box_x0 - edge > threshold:
             cols.append([u])
         else:
             cols[-1].append(u)
-        edge = max(edge, u.x1)
+        edge = max(edge, u.box_x1)
     return cols
 
 
@@ -125,10 +158,14 @@ def find_column_split(rows: Sequence[Sequence[Unit]],
     Returns ``(None, evidence)`` when the rows do not agree, in which case the caller
     keeps them as separate lines rather than forcing a table on them.
     """
+    # Between boxes, not ink.  An italic letter's box includes the italic kern TeX put
+    # after it, and measuring without that makes an ordinary medium space between "F"
+    # and the next atom look 1.4 pt wider than it is -- wide enough to be mistaken for a
+    # column separator, which then makes the rows disagree and loses the table.
     gaps: list[float] = []
     for row in rows:
         for a, b in zip(row, row[1:]):
-            gaps.append(b.x0 - a.x1)
+            gaps.append(b.box_x0 - a.box_x1)
     glue_max = _widest_automatic_space(ctx)
     ev: dict[str, Any] = {
         "n_rows": len(rows),

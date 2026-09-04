@@ -170,6 +170,26 @@ CASES = [
      "\\mkern-10mu pulls the surd back over its index, so an index always ends inside "
      "its own surd's span"),
 
+    ("overline-over-an-accent",
+     OverLine(Acc("\\acute", b)),
+     "an accent has zero width in TeX's hlist and is centred, so it sticks out of the "
+     "box it belongs to; containment cannot be the membership test for one"),
+
+    ("accent-over-an-overline",
+     Acc("\\acute", OverLine(b)),
+     "an accent placed over a box that already contains a rule straddles that rule; a "
+     "rule with nothing but an accent above it is an \\overline, not a fraction"),
+
+    ("one-column-table-with-a-fraction-in-it",
+     Mat(((Frac(Ident("l"), N("3")),), (Ident("T"),)), "bmatrix"),
+     "rows are split by baseline: a fraction in the top row hangs down close enough to "
+     "the row below that no box-gap threshold separates them"),
+
+    ("table-row-wider-than-its-neighbour",
+     Mat(((x,), (Seq((Ident("F"), Op("∩", "\\cap"), Ident("q"))),)), "pmatrix"),
+     "column gaps are measured between boxes: an italic letter's box includes the "
+     "italic kern, and without it an ordinary medium space looks like a separator"),
+
     ("integral-with-a-delimited-superscript",
      Seq((BigOp("\\int", x, Delim(I("g"), "bracket")), x)),
      "\\int takes scripts, not limits, and its subscript sits at w - italic while its "

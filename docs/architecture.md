@@ -140,12 +140,16 @@ The project's rule is that a tolerance must be *derived*, not tuned. The ones in
 | script growth (tight) | 0.05 pt | box-to-box contiguity; medium/thick glue vanishes in script styles |
 | script growth (wide) | `5/18` quad | a thick space, the widest glue that survives in script style |
 | column separator | `> 1.25 × 5/18` quad | wider than any automatic inter-atom space |
-| row split | `text_size/2` | smaller than `\baselineskip`, larger than any script shift |
+| row split (baselines) | `text_size/2` | smaller than `\baselineskip`, larger than any script shift |
 | baseline equality | `0.005 × text_size` | absorbs pdfTeX's coordinate rounding, nothing more |
 | residual → confidence | `0.002 × text_size` | the PDF's own precision |
 
-The two remaining judgement calls are the row-split threshold and the horizontal-coverage
-test that validates it; both are documented at the call site in `parse/matrices.py`.
+Rows are separated by *baseline*, not by whitespace: a fraction in the top row of a table
+hangs down close to the row beneath it and a script in one row reaches up past the row
+above, so there is frequently no gap to find. What validates a split is not coverage but
+*size* -- every row of a table is set at the enclosing size and a script never is. The one
+remaining judgement call is the row-split threshold itself, documented at the call site in
+`parse/matrices.py`.
 
 ## Ground truth
 
@@ -172,22 +176,19 @@ Asserting either would be blaming the decompiler for an ambiguity in the ground 
 
 Each of these is a real failure with a known cause, not a mystery.
 
-1. **Aligned block followed by material on the outer baseline.**
-   `\begin{matrix} ψ \\ L \end{matrix} x` — the matrix is a `\vcenter` box and `x` sits on
-   the outer baseline, between the two rows. Row splitting sees three baselines and the
-   horizontal-coverage test rejects the split. The fix is to detect the aligned block as a
-   *sub-region* rather than to split the whole row; that is a refactor of `matrices.py`,
-   not a threshold change.
-2. **A script on an already-scripted box** — `{α_a^y}^7`. The outer superscript shares a
-   vertical band with the inner one and is only separated by its starting x, which the
-   column logic gets right when the inner sub is wide and wrong when it is narrow.
-3. **Skew kerns are not read.** `make_math_accent` shifts an accent by the kern between
+1. **A script on a braced group whose last atom is not the tallest thing in it** —
+   `{\sum_a^b\, k}^x`. The outer superscript is placed on the group's box, which is taller
+   than `k`, so it lands higher than a script on `k` would; the parser attaches it to `k`
+   anyway. The evidence to fix it is there — the residual against `k` is large and against
+   the group is not — but acting on it means letting a script recogniser extend its own
+   base leftward, which is not yet implemented.
+2. **Skew kerns are not read.** `make_math_accent` shifts an accent by the kern between
    the nucleus and the font's `\skewchar`, which lives in the TFM's lig/kern program — the
    one part of the TFM this reader skips. The accent recogniser therefore reports the skew
    as evidence rather than checking it. Parsing lig/kern would make accents exact.
-4. **Inline mathematics is not detected**, only displayed equations. The decompiler itself
+3. **Inline mathematics is not detected**, only displayed equations. The decompiler itself
    is style-agnostic; pass `--bbox` for inline formulae.
-5. **Non-TeX fonts degrade to ToUnicode**, flagged as `unicode_source: "tounicode"`, with
+4. **Non-TeX fonts degrade to ToUnicode**, flagged as `unicode_source: "tounicode"`, with
    metrics from the PDF's `/Widths`. Structure recovery still works but the residuals stop
    being meaningful.
 

@@ -345,14 +345,17 @@ def parse_units(units: list[Unit], ctx: ParseContext,
     units = accents.attach(units, ctx)
     units = delimiters.pair(units, ctx, _sub_parse_fenced, baseline)
 
-    lines = matrices.split_rows(units, ctx)
-    if len(lines) > 1:
-        return matrices.build(lines, ctx, _sub_parse, inside_fence).node
-
+    # An aligned block *beside* other material is tested first: a \vcenter table puts
+    # the enclosing line's baseline between its rows, so splitting all the baselines
+    # would make the material next to the table into a row of it.
     block_rows, outside = matrices.aligned_block(units, ctx, baseline)
     if block_rows is not None:
         block = matrices.build(block_rows, ctx, _sub_parse, inside_fence)
         units = sorted(outside + [block], key=lambda u: (u.x0, -u.baseline))
+    else:
+        lines = matrices.split_rows(units, ctx)
+        if len(lines) > 1:
+            return matrices.build(lines, ctx, _sub_parse, inside_fence).node
 
     baseline = _row_baseline(units, ctx)
     units = scripts.attach(units, ctx, _sub_parse, baseline)

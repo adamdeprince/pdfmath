@@ -38,6 +38,7 @@ def _candidates(rule: Rule, runs: Sequence[GlyphRun], rules: Sequence[Rule],
     pad = ctx.x_tol
     above: list[Any] = []
     below: list[Any] = []
+    from .accents import ACCENT_GLYPHS
     for r in runs:
         b = r.bbox
         # Containment, not centring.  Rule 15 packs each part into a box centred on the
@@ -45,9 +46,23 @@ def _candidates(rule: Rule, runs: Sequence[GlyphRun], rules: Sequence[Rule],
         # or denominator lies *inside* the bar's span.  Testing only the centre lets a
         # narrow bar -- a fraction in a script, say -- claim a wide operator centred
         # beneath it.
-        if not span.contains_x(b, pad):
+        #
+        # Accents are the exception, and TeX says why: make_math_accent sets the accent
+        # box's width to zero and centres it, so a wide accent over a narrow nucleus
+        # sticks out of the box on both sides while still being inside it.
+        is_accent = r.symbol.glyph in ACCENT_GLYPHS
+        inside = (span.x0 - pad <= b.cx <= span.x1 + pad if is_accent
+                  else span.contains_x(b, pad))
+        if not inside:
             continue
-        (above if b.cy > span.y1 else below).append(r)
+        if is_accent:
+            # An accent's box overlaps whatever it is set over, so its centre says
+            # nothing.  "\\overline{\\acute b}" leaves the acute entirely below the bar;
+            # "\\acute{\\overline b}" makes it straddle, because the accent was placed
+            # over a box that already contained the rule.
+            (below if b.y1 <= span.y0 + ctx.eps else above).append(r)
+        else:
+            (above if b.cy > span.y1 else below).append(r)
     for o in rules:
         if o.id == rule.id:
             continue
@@ -73,7 +88,14 @@ def claim(rule: Rule, runs: Sequence[GlyphRun], rules: Sequence[Rule],
     anything outside it does not -- and then by structural cohesion (blocks.py), which
     is what keeps a fraction inside a matrix cell from reaching into the row above.
     """
+    from .accents import ACCENT_GLYPHS
     above, below = _candidates(rule, runs, rules, ctx)
+    # A rule with nothing but an accent above it is an \overline that something was
+    # accented *over*, not a fraction with an accent for a numerator.  The accent is
+    # left unclaimed so that accents.attach can put it over the finished overline.
+    if above and all(getattr(getattr(r, "symbol", None), "glyph", None) in ACCENT_GLYPHS
+                     for r in above):
+        above = []
     num = blocks.block_above(rule.bbox.y1, above, ctx)
     den = blocks.block_below(rule.bbox.y0, below, ctx)
     num = _absorb_orphans(rule, num, above, runs, ctx)
