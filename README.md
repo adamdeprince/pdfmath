@@ -107,17 +107,20 @@ so unlike `benchmark` it works on real documents.
 recompiles exactly   17 / 17    58 / 58      94% - 95%           3.9%
 ```
 
-That last number is the important one, and it is much worse than the confidence scores
-suggested. The oracle says why: of 127 detected equations in the arXiv preprints, five
-recompile identically, twenty come back with the right glyphs in slightly wrong places,
-and ninety come back with *different glyphs* — overwhelmingly because the region was not
-a single displayed equation (a fragment, an `eqnarray` spanning several lines, an equation
-number swept in) or because a `\left(` in the original was sized by content we failed to
-recover. Equations of ten glyphs or fewer reach 25%; larger ones do not yet reach any.
+That last number is much worse than the confidence scores suggested — and put next to the
+arXiv result above, it says precisely where the problem is.
 
-So: the synthetic corpus is solved, and real documents are not. The gap is mostly
-*detection* and complex real-world structures, not the Appendix G inversion — and having
-a number for it rather than a confidence score is the point of building the oracle.
+|  | equation regions from | exact |
+|---|---|---|
+| `pdfmath arxiv` | the paper's own source, one display per page | **87.3%** |
+| `pdfmath roundtrip` | our detector, on the same PDFs | **3.9%** |
+
+Same parser, same documents. The only difference is whether equation *detection* is in
+the loop. So the decompiler handles real 1990s and 2000s mathematics well, and the
+detector does not yet hand it whole equations — it produces fragments, merges an
+`eqnarray` into one row, sweeps in an equation number. That is the largest open item in
+the project, and it is a conclusion the two oracles produce jointly that neither could
+produce alone.
 
 ## Quickstart
 

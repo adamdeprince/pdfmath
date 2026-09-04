@@ -184,12 +184,13 @@ Asserting either would be blaming the decompiler for an ambiguity in the ground 
 
 Each of these is a real failure with a known cause, not a mystery.
 
-1. **Real documents do not round-trip.** 3.9% of detected equations in the arXiv corpus
-   recompile identically, against 100% of the synthetic corpus. The oracle attributes most
-   of the gap to detection producing regions that are not single displayed equations, and
-   the rest to structures in complex real equations that we get wrong — visible as a
-   `\left(` whose size implies content we did not recover. This is the largest open item
-   in the project and the reason the confidence scores should not be read as accuracy.
+1. **Equation detection is the bottleneck on real documents.** The two oracles isolate it:
+   given regions taken from the paper's own source (`pdfmath arxiv`), 87.3% of displays
+   come out exactly right; given regions from our detector on the same PDFs
+   (`pdfmath roundtrip`), 3.9% recompile identically. Same parser, same documents. The
+   detector produces fragments, merges an `eqnarray` into one row, and sweeps in equation
+   numbers. This is the largest open item in the project, and the reason the confidence
+   scores should not be read as accuracy.
 2. **A script on a braced group whose last atom is not the tallest thing in it** —
    `{\sum_a^b\, k}^x`. The outer superscript is placed on the group's box, which is taller
    than `k`, so it lands higher than a script on `k` would; the parser attaches it to `k`
