@@ -194,6 +194,11 @@ CASES = [
      Seq((BigOp("\\int", x, Delim(I("g"), "bracket")), x)),
      "\\int takes scripts, not limits, and its subscript sits at w - italic while its "
      "superscript sits at w"),
+
+    ("adjacent-digits", Seq((Num("0"), Num("0"))),
+     "math mode discards the space between digits, so `0 0` and `00` are the same two "
+     "glyphs at the same two positions; ground truth may not claim a distinction the "
+     "page does not record, so the harness joins adjacent numeric siblings"),
 ]
 
 

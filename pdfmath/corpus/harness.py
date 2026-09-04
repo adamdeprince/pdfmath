@@ -32,11 +32,17 @@ from .grammar import Expr
 def normalise(sig: Any) -> Any:
     """Canonicalise a signature before comparison.
 
-    Only one normalisation is needed, and it is forced on us by the medium rather than
-    chosen: **nested rows are not observable**.  TeX renders ``{a+b}c`` and ``a+bc``
-    identically, so no decompiler can recover the grouping, and ground truth must not
-    claim it either.  Row nesting is therefore flattened on both sides.  Nothing else is
-    normalised: node kinds, leaf text and child order all have to match exactly.
+    Both normalisations are forced on us by the medium rather than chosen; each is a
+    distinction the page does not record, so ground truth must not claim it.
+
+    **Nested rows are not observable.**  TeX renders ``{a+b}c`` and ``a+bc`` identically,
+    so no decompiler can recover the grouping.  Row nesting is flattened on both sides.
+
+    **Adjacent numbers are not observable.**  Math mode discards spaces between digits,
+    so ``0 0`` and ``00`` are the same two glyphs at the same two positions -- verified,
+    not assumed.  Runs of adjacent numeric siblings are therefore joined.
+
+    Nothing else is normalised: node kinds, leaf text and child order must match exactly.
     """
     if not isinstance(sig, tuple):
         return sig
@@ -50,9 +56,23 @@ def normalise(sig: Any) -> Any:
             flat.extend(_kids(nk))
         elif nk is not None:
             flat.append(nk)
+    flat = _join_numbers(flat)
     if sig[0] == "Row" and len(flat) == 1:
         return flat[0]
     return tuple(sig[:-1]) + (tuple(flat),)
+
+
+def _join_numbers(kids: list[Any]) -> list[Any]:
+    """Join runs of adjacent ``Number`` siblings; a gap between them would be a Space."""
+    out: list[Any] = []
+    for k in kids:
+        if (out and isinstance(k, tuple) and len(k) == 2 and k[0] == "Number"
+                and isinstance(out[-1], tuple) and len(out[-1]) == 2
+                and out[-1][0] == "Number"):
+            out[-1] = ("Number", out[-1][1] + k[1])
+        else:
+            out.append(k)
+    return out
 
 def edges(sig: Any, parent: Optional[str] = None,
           out: Optional[list[tuple[str, str, int]]] = None,
