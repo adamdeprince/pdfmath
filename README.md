@@ -115,6 +115,13 @@ node 4  SubSup  [subsuperscript]  confidence 0.9990
 `Unknown` carrying its original geometry. Nothing is silently dropped — there is a test
 for that.
 
+**Atom classes solved backwards from the spacing.** ``\mathbin{b}`` and ``\mathrel{b}``
+print the same glyph, so the character says nothing -- but TeX's inter-atom glue does, and
+it is an exact multiple of a font parameter we hold. Measuring the gaps either side of
+``b`` recovers Bin, Rel and Punct *uniquely*; Ord/Open/Close and Op/Inner collapse,
+because those pairs produce identical pages and no method could separate them. The table
+is in `docs/architecture.md`; the experiment runs as a test.
+
 **A debug view of exactly what the parser saw**: glyph boxes, baselines, extracted rules,
 and the recovered tree, in one SVG with toggleable layers.
 

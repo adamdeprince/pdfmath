@@ -28,7 +28,7 @@ from ..fonts.symbols import AtomClass, Role
 from ..geometry.bbox import BBox
 from ..tree.nodes import (Identifier, LargeOperator, Leaf, MathNode, Number,
                           Operator, Provenance, Row, Space, Text, Unknown)
-from . import spacing
+from . import atoms, spacing
 from .context import ParseContext
 from .units import GlyphRun, Unit
 
@@ -225,6 +225,12 @@ def build(units: list[Unit], ctx: ParseContext) -> MathNode:
 
     children: list[MathNode] = []
     script_style = ctx.style >= 4
+    # TeX rewrote the atom classes before it inserted any glue, so we have to as well:
+    # the minus of "-x" is an Ord, not a Bin, and predicting a medium space there would
+    # invent an author-inserted space in every unary sign in the document.
+    raw_classes = [u.atom for u in units]
+    classes = atoms.reclassify(raw_classes)
+    rewrites = atoms.describe(raw_classes, classes)
     for k, u in enumerate(units):
         if k:
             prev = units[k - 1]
@@ -233,7 +239,7 @@ def build(units: list[Unit], ctx: ParseContext) -> MathNode:
             # without them lands between two entries of TeX's glue table.
             gap = u.box_x0 - prev.box_x1
             obs = spacing.observe(gap, ctx)
-            left, right = prev.atom, u.atom
+            left, right = classes[k - 1], classes[k]
             expected = spacing.expected_mu(left, right, script_style)
             ev: dict[str, Any] = {
                 "gap_pt": round(obs.gap_pt, 5),
@@ -249,6 +255,8 @@ def build(units: list[Unit], ctx: ParseContext) -> MathNode:
                 "math_quad_pt": round(obs.quad_pt, 4),
                 "left_atom": left.short,
                 "right_atom": right.short,
+                "left_atom_as_written": raw_classes[k - 1].short,
+                "right_atom_as_written": raw_classes[k].short,
                 "expected_mu_from_atom_classes": expected,
                 "atom_classes_consistent": (
                     expected is not None and abs(expected - obs.nearest_mu) < 1e-9),
@@ -274,8 +282,12 @@ def build(units: list[Unit], ctx: ParseContext) -> MathNode:
     if len(children) == 1:
         return children[0]
     row = Row(children=children)
+    if rewrites:
+        row_evidence = {"atom_class_rewrites": rewrites}
+    else:
+        row_evidence = {}
     row.prov = Provenance(
         sorted({g for u in units for g in u.glyph_ids}),
         sorted({r for u in units for r in u.rule_ids}),
-        BBox.union([u.bbox for u in units]), 1.0, {}, "row")
+        BBox.union([u.bbox for u in units]), 1.0, row_evidence, "row")
     return row

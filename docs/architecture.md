@@ -191,6 +191,47 @@ Each of these is a real failure with a known cause, not a mystery.
    metrics from the PDF's `/Widths`. Structure recovery still works but the residuals stop
    being meaningful.
 
+## Inverting TeX's spacing: the result
+
+The project set out to ask whether TeX's atom classes can be solved backwards from the
+page. They can, partially, and the partition is exact rather than statistical.
+
+``\mathbin{b}`` and ``\mathrel{b}`` print the same glyph -- an ordinary cmmi ``b`` -- so
+the character says nothing. The glue does. Measuring the gaps either side of ``b`` in
+``a \math???{b} c``, in units of ``mu`` = quad/18:
+
+| declared | left | right | classes consistent with the measurement |
+|---|---|---|---|
+| Ord | 0.000 | 0.001 | Ord, Open, Close |
+| Op | 2.999 | 3.000 | Op, Inner |
+| **Bin** | 3.996 | 3.997 | **Bin** |
+| **Rel** | 5.004 | 5.005 | **Rel** |
+| Open | 0.000 | 0.001 | Ord, Open, Close |
+| Close | 0.000 | 0.001 | Ord, Open, Close |
+| **Punct** | 0.000 | 3.007 | **Punct** |
+| Inner | 3.006 | 2.989 | Op, Inner |
+
+Three classes are recovered uniquely; the other five collapse into two groups. The
+collapse is not a limitation of the method -- those classes produce *identical* pages
+between Ord neighbours, so no procedure whatever could separate them, and reporting a
+single answer there would be inventing a distinction the document does not make. The
+measurements land within 0.007 mu of the table, which is the PDF's rounding.
+
+Two things follow, and both are implemented.
+
+**TeX's own rewriting has to be reproduced first.** ``mlist_to_hlist`` demotes a Bin to
+an Ord when it starts a list or follows a Bin, Op, Rel, Open or Punct, and demotes a Bin
+that precedes a Rel, Close or Punct (tex.web 727-728). This is why ``-x`` and ``a-b`` use
+one glyph with two spacings. Without the rewrite, every unary sign in a document produces
+a gap the table cannot explain and the parser reports an author-inserted space that is
+not there. `parse/atoms.py` applies it; `tests/synthetic/test_atom_classes.py` is the
+experiment above, run as a test.
+
+**A gap the table *cannot* explain is therefore informative.** It means the author asked
+for it -- a ``\,``, a ``\quad``, an ``\hspace`` -- and that is the only case where a
+``Space`` node is emitted. Automatic glue is left out, because a MathML renderer inserts
+its own.
+
 ## Comparison with MathSeer
 
 `docs/comparison.md` states the hypothesis the project is meant to test, what has been
