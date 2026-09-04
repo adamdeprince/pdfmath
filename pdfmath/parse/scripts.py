@@ -286,9 +286,11 @@ def _pack(group: list[Unit], ctx: ParseContext,
         baseline = min(full, key=lambda u: u.x0).baseline
     gids = [g for u in group for g in u.glyph_ids]
     rids = [r for u in group for r in u.rule_ids]
-    # A braced sub-list is an Ord atom, whatever it contains.
+    # A braced sub-list is an Ord atom, whatever it contains, and it keeps the trailing
+    # italic kern of its rightmost member (see _build).
+    last = max(group, key=lambda u: u.x1)
     return Unit.composite(node, baseline, box, max(u.size for u in group), gids,
-                          rids, atom=AtomClass.ORD)
+                          rids, atom=AtomClass.ORD, trail=last.trail)
 
 
 def _candidate_styles(ctx: ParseContext) -> list[ParseContext]:
@@ -388,11 +390,18 @@ def _build(base: Unit, sup: Optional[Unit], sub: Optional[Unit],
                "superscript": sup.node.node_id if sup else None,
                "subscript": sub.node.node_id if sub else None},
         confidence=conf, evidence=ev))
-    # An atom keeps its class when it takes scripts: a summation with limits is still
-    # an Op, and the thin space after it depends on that.
+    # How far the finished atom reaches.  clean_box hpacks the script *before* it drops
+    # the italic kern (tex.web 720-721), so the kern node goes but its contribution to
+    # the width stays -- a subscript ending in cmmi's "Y" is 1.9 pt wider at 8 pt than
+    # its ink.  \scriptspace is then added to each script box.  Miss either and the next
+    # atom looks displaced, and the parser reports a space the author never asked for.
+    reach = base.x1 + (base.trail if sub is None else 0.0)
+    for script in (sup, sub):
+        if script is not None:
+            reach = max(reach, script.x1 + script.trail + ctx.script_space)
     return Unit.composite(node, base.baseline, box, base.size, gids, rids,
                           italic=base.italic, lead=base.lead,
-                          trail=ctx.script_space, atom=base.atom)
+                          trail=max(0.0, reach - box.x1), atom=base.atom)
 
 
 def _score(residual: float, ctx: ParseContext) -> float:

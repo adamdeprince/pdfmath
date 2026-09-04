@@ -56,8 +56,10 @@ exact expressions           100.000%   100.000%    95.7% - 99.0%
 The random figures are from three seeds the parser was never tuned against (7, 11, 23),
 n=300 each. `pdfmath benchmark --suite all --seed N` reproduces any of them.
 
-And on real documents it holds up. Thirty pages of three arXiv preprints from 1991, 1992
-and 2002 — Computer Modern and AMS fonts, essentially no usable ToUnicode maps:
+And on real documents it holds up. Thirty pages of three arXiv preprints — papers from
+1991, 1992 and 2002, though the PDFs arXiv serves for them were rendered through dvips and
+Ghostscript in 2018 and 2024. Computer Modern and AMS fonts, essentially no usable
+ToUnicode maps:
 
 ```
 210 displayed equations detected and decompiled
@@ -107,22 +109,40 @@ so unlike `benchmark` it works on real documents.
 recompiles exactly   17 / 17    58 / 58      94% - 95%           3.9%
 ```
 
-That last number is much worse than the confidence scores suggested — and put next to the
-arXiv result above, it says precisely where the problem is.
+That number is not comparable with the 87.3% above, and an earlier draft of this file
+wrongly put the two side by side. They differ in *what they measure*, not only in how the
+equation regions were found:
 
-|  | equation regions from | exact |
-|---|---|---|
-| `pdfmath arxiv` | the paper's own source, one display per page | **87.3%** |
-| `pdfmath roundtrip` | our detector, on the same PDFs | **3.9%** |
+* 87.3% is **structural agreement** — the recovered tree matches LaTeXML's reading of the
+  author's source.
+* 3.9% is **glyph-identical recompilation** — a far stricter test that also holds the
+  LaTeX serializer and the spacing model to account.
 
-Same parser, same documents. The only difference is whether equation *detection* is in
-the loop. So the decompiler handles real 1990s and 2000s mathematics well, and the
-detector does not yet hand it whole equations — it produces fragments, merges an
-`eqnarray` into one row, sweeps in an equation number. That is the largest open item in
-the project, and it is a conclusion the two oracles produce jointly that neither could
-produce alone.
+Holding the paper (`math/0211159`) and the metric fixed, and varying only where the
+equation regions come from:
 
-## Quickstart
+| regions from | recompiles identically |
+|---|---|
+| the paper's own source, one display per page | 28.3% |
+| our detector, on the PDF arXiv serves | 10.4% |
+
+So detection costs about 18 points, not 83. The dominant gap is between the two metrics:
+95.3% of these displays match LaTeXML structurally, and 28.3% recompile identically. The
+difference is almost entirely `shifted` verdicts — right glyphs, right structure, positions
+off by a point or two — which is the LaTeX serializer's spacing fidelity rather than the
+parse.
+
+Chasing one of those found a real TeX detail: `clean_box` hpacks a script *before* it
+drops the italic kern (tex.web §720–721), so a subscript's box keeps the italic correction
+of its last character even though the kern node is gone. Modelling that took the
+source-region figure from 17.4% to 28.3%. More of the same is likely left.
+
+A caveat on the second row: the PDFs arXiv serves for these papers were produced by
+Ghostscript in 2018 and 2024, not by pdfTeX in 1991. They are genuine TeX output rendered
+through dvips, so the extraction results hold, but comparing them against a TeX Live 2026
+rebuild introduces a toolchain difference that the first row does not have.
+
+## Quickstart## Quickstart
 
 ```bash
 pip install -e ".[dev]"

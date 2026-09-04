@@ -184,26 +184,32 @@ Asserting either would be blaming the decompiler for an ambiguity in the ground 
 
 Each of these is a real failure with a known cause, not a mystery.
 
-1. **Equation detection is the bottleneck on real documents.** The two oracles isolate it:
-   given regions taken from the paper's own source (`pdfmath arxiv`), 87.3% of displays
-   come out exactly right; given regions from our detector on the same PDFs
-   (`pdfmath roundtrip`), 3.9% recompile identically. Same parser, same documents. The
-   detector produces fragments, merges an `eqnarray` into one row, and sweeps in equation
-   numbers. This is the largest open item in the project, and the reason the confidence
-   scores should not be read as accuracy.
-2. **A script on a braced group whose last atom is not the tallest thing in it** —
+1. **The LaTeX serializer's spacing fidelity, not the parse, limits the round trip.**
+   Holding the paper and the metric fixed, 95.3% of `math/0211159`'s displays agree with
+   LaTeXML structurally and 28.3% recompile glyph-identically; nearly all of the
+   difference is `shifted` — right glyphs and right structure, positions a point or two
+   out. Each one is a place where our model of TeX's box widths is incomplete. One such
+   was found and fixed while writing this (a script box keeps the italic correction of its
+   last character, because `clean_box` hpacks before dropping the kern, tex.web §720–721)
+   and it was worth eleven points on its own.
+2. **Detection costs about eighteen points**, measured the same way: 28.3% with regions
+   taken from the paper's source against 10.4% with regions from our detector. Real, but
+   an order of magnitude smaller than an earlier draft of the README claimed — that
+   comparison put a structural metric next to a recompilation metric and attributed the
+   whole difference to detection.
+3. **A script on a braced group whose last atom is not the tallest thing in it** —
    `{\sum_a^b\, k}^x`. The outer superscript is placed on the group's box, which is taller
    than `k`, so it lands higher than a script on `k` would; the parser attaches it to `k`
    anyway. The evidence to fix it is there — the residual against `k` is large and against
    the group is not — but acting on it means letting a script recogniser extend its own
    base leftward, which is not yet implemented.
-3. **Skew kerns are not read.** `make_math_accent` shifts an accent by the kern between
+4. **Skew kerns are not read.** `make_math_accent` shifts an accent by the kern between
    the nucleus and the font's `\skewchar`, which lives in the TFM's lig/kern program — the
    one part of the TFM this reader skips. The accent recogniser therefore reports the skew
    as evidence rather than checking it. Parsing lig/kern would make accents exact.
-4. **Inline mathematics is not detected**, only displayed equations. The decompiler itself
+5. **Inline mathematics is not detected**, only displayed equations. The decompiler itself
    is style-agnostic; pass `--bbox` for inline formulae.
-5. **Non-TeX fonts degrade to ToUnicode**, flagged as `unicode_source: "tounicode"`, with
+6. **Non-TeX fonts degrade to ToUnicode**, flagged as `unicode_source: "tounicode"`, with
    metrics from the PDF's `/Widths`. Structure recovery still works but the residuals stop
    being meaningful.
 

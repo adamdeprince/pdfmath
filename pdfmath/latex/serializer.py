@@ -21,6 +21,7 @@ nothing.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from typing import Optional
 
@@ -67,6 +68,10 @@ _TEXT_ENCODINGS = {"OT1", "OT1TT", "CMTI", "CMSS"}
 #: expressions that must be braced before a script can be attached to them
 _NEEDS_BRACES = (Superscript, Subscript, SubSup, UnderOver, Row, Lines)
 
+#: LaTeX that already forms one atom: a single character, a control sequence, or a
+#: control sequence with its argument.
+_SELF_CONTAINED = re.compile(r".|\\[A-Za-z@]+|\\[A-Za-z@]+\{.*\}", re.S)
+
 
 @dataclass
 class LatexResult:
@@ -106,7 +111,12 @@ class LatexWriter:
         body = self._node(node)
         if isinstance(node, _NEEDS_BRACES) or isinstance(node, (Accent, Overline)):
             return "{{}" + body + "}"
-        if isinstance(node, Leaf) and len(body) <= 1:
+        if isinstance(node, Leaf) and _SELF_CONTAINED.fullmatch(body):
+            # A single control sequence needs no braces, and must not get them: "{\\intop}"
+            # is an Ord atom where "\\intop" is an Op, which loses the thin space after
+            # it *and* the axis centring make_op applies to an operator's glyph.  Only a
+            # bare multi-character literal such as "10" needs bracing, or the script
+            # would attach to its last digit.
             return body
         return "{" + body + "}"
 
@@ -227,10 +237,23 @@ class LatexWriter:
         return f"\\frac{{{num}}}{{{den}}}"
 
     def _n_Superscript(self, n: Superscript) -> str:
-        return f"{self._brace(n.children[0])}^{self._group(n.children[1])}"
+        return (f"{self._operator_base(n.children[0])}"
+                f"^{self._group(n.children[1])}")
 
     def _n_Subscript(self, n: Subscript) -> str:
-        return f"{self._brace(n.children[0])}_{self._group(n.children[1])}"
+        return (f"{self._operator_base(n.children[0])}"
+                f"_{self._group(n.children[1])}")
+
+    def _operator_base(self, base: MathNode) -> str:
+        """A script base, with \\nolimits when it is an operator that took scripts.
+
+        In display style an Op atom puts its scripts under and over itself unless told
+        otherwise, so a bare "\\intop_M" would come back as a limit rather than a
+        subscript and move everything after it.
+        """
+        if isinstance(base, LargeOperator):
+            return f"{self._node(base)}\\nolimits"
+        return self._brace(base)
 
     def _n_SubSup(self, n: SubSup) -> str:
         base, sub, sup = n.children

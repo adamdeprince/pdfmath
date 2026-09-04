@@ -24,9 +24,11 @@ generated expressions from three seeds the parser was never tuned against, with 
 glyph recovery throughout (`pdfmath benchmark`).  Held-out seeds are reported rather than
 the development seed, because only the former is evidence.
 
-**It survives contact with real 1991–2002 papers.** On 30 pages of three arXiv preprints
+**It survives contact with real papers.** On 30 pages of three arXiv preprints
 (`math/9201254` 1992, `hep-th/9108028` 1991, `math/0211159` 2002 — Computer Modern, AMS
-fonts, no useful ToUnicode maps), 210 displayed equations were detected and decompiled
+fonts, no useful ToUnicode maps; the PDFs themselves were rendered through dvips and
+Ghostscript in 2018 and 2024, not by pdfTeX at the time), 210 displayed equations were
+detected and decompiled
 with **100% glyph recovery** (10776/10776) and a median structural confidence of 0.916.
 99.93% of glyphs were identified from the *TeX font encoding* rather than from the PDF's
 Unicode metadata, which is the specific advantage the hypothesis rests on: those documents
