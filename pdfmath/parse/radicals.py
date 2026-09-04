@@ -98,6 +98,11 @@ def _looks_like_index(run: GlyphRun, surd: GlyphRun, ctx: ParseContext) -> bool:
     b = run.bbox
     if b.x1 > surd.bbox.x1:
         return False
+    # ``\\mkern-10mu`` pulls the surd back over the index, so an index always ends
+    # *inside* its own surd's span.  Without this, a second radical further right would
+    # happily adopt the first one's index.
+    if b.x1 < surd.bbox.x0 - ctx.x_tol:
+        return False
     if run.head.size > ctx.size * 0.6 + ctx.eps:      # scriptscript is 0.5 of text size
         return False
     return b.cy > surd.bbox.cy

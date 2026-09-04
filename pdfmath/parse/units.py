@@ -28,6 +28,7 @@ class GlyphRun:
     """
 
     glyphs: list[Glyph]
+    override: Optional[SymbolInfo] = None
 
     @property
     def head(self) -> Glyph:
@@ -35,7 +36,7 @@ class GlyphRun:
 
     @property
     def symbol(self) -> SymbolInfo:
-        return self.head.symbol
+        return self.override if self.override is not None else self.head.symbol
 
     @property
     def bbox(self) -> BBox:
@@ -174,12 +175,39 @@ def merge_runs(glyphs: Sequence[Glyph], tol: float) -> list[GlyphRun]:
                 if g.bbox.y1 <= cur[-1].bbox.y0 + tol * 4:
                     cur.append(g)
                 else:
-                    runs.append(GlyphRun(cur))
+                    runs.append(_assembled(cur))
                     cur = [g]
-            runs.append(GlyphRun(cur))
+            runs.append(_assembled(cur))
 
     runs.sort(key=lambda r: (r.bbox.x0, -r.bbox.y1))
     return runs
+
+
+def _assembled(pieces: list[Glyph]) -> GlyphRun:
+    """A run of stacked pieces, with its identity corrected for what is *missing*.
+
+    cmex has no floor or ceiling pieces: a tall left floor is ``bracketleftex`` repeated
+    with a ``bracketleftbt`` at the bottom and *no top hook*, and a tall ceiling is the
+    same without the bottom.  The absence is the whole distinction -- the recipes in the
+    TFM say so, ``bracketleftbt``'s having ``top = 0`` -- so reading only the piece names
+    would report every built-up floor and ceiling as a square bracket.
+    """
+    run = GlyphRun(pieces)
+    sym = run.head.symbol
+    if len(pieces) < 2 or sym.base != "bracket" or sym.role is not Role.DELIM_PIECE:
+        return run
+    kinds = {g.symbol.piece for g in pieces}
+    if "tp" in kinds and "bt" in kinds:
+        return run
+    if "bt" in kinds:
+        base, uni = "floor", "\u230a" if sym.side == "left" else "\u230b"
+    elif "tp" in kinds:
+        base, uni = "ceiling", "\u2308" if sym.side == "left" else "\u2309"
+    else:
+        return run
+    run.override = SymbolInfo(sym.glyph, uni, sym.atom, sym.role, base,
+                              sym.size_rank, sym.side, sym.piece)
+    return run
 
 
 def _columns_by_x(glyphs: list[Glyph], tol: float) -> list[list[Glyph]]:

@@ -48,9 +48,9 @@ from the same source objects — never from the PDF:
 ```
                           milestone   extended   random, held-out seeds
 glyph recovery              100.000%   100.000%   100.000%
-structural edges            100.000%   100.000%    92.7% - 97.7%
+structural edges            100.000%   100.000%    93.5% - 98.0%
 node accuracy               100.000%   100.000%    97.7% - 99.3%
-exact expressions           100.000%   100.000%    94.0% - 97.7%
+exact expressions           100.000%   100.000%    94.7% - 98.0%
 ```
 
 The random figures are from three seeds the parser was never tuned against (7, 11, 23),

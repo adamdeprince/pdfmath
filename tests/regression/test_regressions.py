@@ -156,6 +156,20 @@ CASES = [
      "var_delimiter sizes a fence to cover its contents, so material it does not "
      "overlap vertically was never inside it"),
 
+    ("built-up-floor-is-not-a-bracket",
+     Delim(Mat(((Ident("r"),), (Ident("H"),), (Ident("w"),)), "matrix"), "floor"),
+     "cmex has no floor pieces: a tall floor is bracket extension modules with a bottom "
+     "hook and no top one, and the absence is the whole distinction"),
+
+    ("built-up-ceiling-is-not-a-bracket",
+     Delim(Mat(((Ident("r"),), (Ident("H"),), (Ident("w"),)), "matrix"), "ceil"),
+     "as above, with the bottom hook missing instead"),
+
+    ("two-radicals-do-not-share-an-index",
+     Seq((Sqrt(Ident("z"), Ident("S")), Sqrt(Ident("N"), Ident("d")))),
+     "\\mkern-10mu pulls the surd back over its index, so an index always ends inside "
+     "its own surd's span"),
+
     ("integral-with-a-delimited-superscript",
      Seq((BigOp("\\int", x, Delim(I("g"), "bracket")), x)),
      "\\int takes scripts, not limits, and its subscript sits at w - italic while its "
