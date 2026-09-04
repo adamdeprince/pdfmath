@@ -18,6 +18,7 @@ from __future__ import annotations
 
 from typing import Any, Callable, Optional, Sequence
 
+from ..fonts.symbols import AtomClass
 from ..geometry.bbox import BBox
 from ..geometry.index import vertical_bands
 from ..tree.nodes import (Lines, MathNode, Matrix, MatrixCell, MatrixRow,
@@ -242,4 +243,5 @@ def build(rows: list[list[Unit]], ctx: ParseContext, parse_group: ParseGroup,
     node.prov = Provenance(gids, rids, box, conf, ev, rule_name)
     ctx.trace.add(Explanation(rule_name, node.node_id, {}, conf, ev))
     baseline = rows[len(rows) // 2][0].baseline if rows and rows[0] else box.cy
-    return Unit.composite(node, baseline, box, size, gids, rids)
+    return Unit.composite(node, baseline, box, size, gids, rids,
+                          atom=AtomClass.ORD)

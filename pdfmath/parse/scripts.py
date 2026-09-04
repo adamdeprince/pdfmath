@@ -40,7 +40,7 @@ from __future__ import annotations
 
 from typing import Any, Callable, Optional, Sequence
 
-from ..fonts.symbols import Role
+from ..fonts.symbols import AtomClass, Role
 from ..geometry.bbox import BBox
 from ..geometry.index import vertical_bands
 from ..tree.nodes import MathNode, Provenance, SubSup, Subscript, Superscript
@@ -286,7 +286,9 @@ def _pack(group: list[Unit], ctx: ParseContext,
         baseline = min(full, key=lambda u: u.x0).baseline
     gids = [g for u in group for g in u.glyph_ids]
     rids = [r for u in group for r in u.rule_ids]
-    return Unit.composite(node, baseline, box, max(u.size for u in group), gids, rids)
+    # A braced sub-list is an Ord atom, whatever it contains.
+    return Unit.composite(node, baseline, box, max(u.size for u in group), gids,
+                          rids, atom=AtomClass.ORD)
 
 
 def _candidate_styles(ctx: ParseContext) -> list[ParseContext]:
@@ -386,9 +388,11 @@ def _build(base: Unit, sup: Optional[Unit], sub: Optional[Unit],
                "superscript": sup.node.node_id if sup else None,
                "subscript": sub.node.node_id if sub else None},
         confidence=conf, evidence=ev))
+    # An atom keeps its class when it takes scripts: a summation with limits is still
+    # an Op, and the thin space after it depends on that.
     return Unit.composite(node, base.baseline, box, base.size, gids, rids,
                           italic=base.italic, lead=base.lead,
-                          trail=ctx.script_space)
+                          trail=ctx.script_space, atom=base.atom)
 
 
 def _score(residual: float, ctx: ParseContext) -> float:

@@ -26,7 +26,7 @@ from __future__ import annotations
 from dataclasses import replace
 from typing import Any, Callable, Optional
 
-from ..fonts.symbols import Role
+from ..fonts.symbols import AtomClass, Role
 from ..geometry.bbox import BBox
 from ..geometry.index import vertical_bands
 from ..tree.nodes import MathNode, Provenance, UnderOver
@@ -129,7 +129,8 @@ def _pack(group: list[Unit], ctx: ParseContext,
     gids = [g for u in group for g in u.glyph_ids]
     rids = [r for u in group for r in u.rule_ids]
     return Unit.composite(node, group[0].baseline, box,
-                          max(u.size for u in group), gids, rids)
+                          max(u.size for u in group), gids, rids,
+                          atom=AtomClass.ORD)
 
 
 def _build(op: Unit, upper: Optional[Unit], lower: Optional[Unit],
@@ -177,7 +178,8 @@ def _build(op: Unit, upper: Optional[Unit], lower: Optional[Unit],
                "over": upper.node.node_id if upper else None,
                "under": lower.node.node_id if lower else None},
         confidence=conf, evidence=ev))
-    return Unit.composite(node, op.baseline, box, op.size, gids, rids)
+    return Unit.composite(node, op.baseline, box, op.size, gids, rids,
+                          atom=AtomClass.OP)
 
 
 def _score(residual: float, ctx: ParseContext) -> float:

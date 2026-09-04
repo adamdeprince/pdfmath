@@ -201,6 +201,69 @@ def cmd_benchmark(args: argparse.Namespace) -> int:
     return 0 if all(r.exact >= args.threshold for r in reports.values()) else 1
 
 
+def cmd_roundtrip(args: argparse.Namespace) -> int:
+    """Recompile what we recovered and check it lands on the same page.
+
+    The oracle needs no ground truth and no second system, so unlike ``benchmark`` it
+    works on real documents.  A verdict of ``exact`` means every glyph came back in the
+    same place relative to its neighbours -- that is, the structure we recovered is one
+    TeX compiles to the page we started from.
+    """
+    from ..detection.equations import find_displayed_equations
+    from ..eval.roundtrip import roundtrip
+
+    style = _style(args.style)
+    region = _bbox(args.bbox, args.bbox_bp)
+    rows: list[dict[str, Any]] = []
+    counts: dict[str, int] = {}
+    for page in extract_pages(args.pdf, args.pages):
+        regions = ([type("R", (), {"bbox": region})()] if region is not None
+                   else find_displayed_equations(page))
+        for i, r in enumerate(regions):
+            src, tree, ctx = _parse_region(page, r.bbox, style)
+            res = roundtrip(tree, src, ctx, workdir=args.workdir,
+                            name=f"rt_p{page.page}_{i}")
+            counts[res.verdict] = counts.get(res.verdict, 0) + 1
+            entry = res.to_json()
+            entry["page"] = page.page
+            entry["bbox"] = [round(v, 2) for v in r.bbox.as_list()]
+            entry["glyphs"]["region"] = len(src.glyphs)
+            rows.append(entry)
+
+    total = sum(counts.values())
+    summary = {"equations": total, "verdicts": counts,
+               "exact_rate": round(counts.get("exact", 0) / total, 6) if total else 1.0}
+    if args.json:
+        print(json.dumps({"summary": summary, "equations": rows}, indent=2,
+                         ensure_ascii=False))
+        return 0 if total and counts.get("exact", 0) == total else 1
+
+    print(f"{args.pdf}")
+    print(f"  equations            {total}")
+    for verdict in ("exact", "shifted", "different", "incomplete", "uncompilable"):
+        if verdict in counts:
+            print(f"  {verdict:<20s} {counts[verdict]:4d}"
+                  f"   {100 * counts[verdict] / total:5.1f}%")
+    print()
+    shown = 0
+    for row in rows:
+        if row["verdict"] == "exact" and not args.all:
+            continue
+        if shown >= args.show:
+            break
+        shown += 1
+        print(f"  page {row['page']} {row['bbox']}  [{row['verdict']}] "
+              f"glyphs {row['glyphs']['original']}/{row['glyphs']['rebuilt']}"
+              + (f"  max offset {row['max_offset_pt']} pt"
+                 if row.get("max_offset_pt") is not None else ""))
+        print(f"      {row['latex'][:160]}")
+        for m in row["mismatches"][:3]:
+            print(f"      #{m['index']}: {m['original']} -> {m['rebuilt']}")
+        for u in row["unreproducible"][:2]:
+            print(f"      unreproducible: {u}")
+    return 0 if total and counts.get("exact", 0) == total else 1
+
+
 def cmd_survey(args: argparse.Namespace) -> int:
     """Triage a real document: what was found, how sure we are, what is unresolved.
 
@@ -435,6 +498,21 @@ def build_parser() -> argparse.ArgumentParser:
                    help="also write LgEval label graphs here, for comparison against "
                         "CROHME/MathSeer tooling")
     b.set_defaults(func=cmd_benchmark)
+
+    t = sub.add_parser("roundtrip",
+                       help="recompile what was recovered and compare the pages")
+    t.add_argument("pdf")
+    t.add_argument("--pages", type=int, nargs="*", default=None)
+    t.add_argument("--bbox", default=None,
+                   help="x0,y0,x1,y1 in TeX points; skips equation detection")
+    t.add_argument("--bbox-bp", action="store_true")
+    t.add_argument("--style", default="display",
+                   choices=["display", "text", "script", "scriptscript"])
+    t.add_argument("--workdir", default=None)
+    t.add_argument("--show", type=int, default=8)
+    t.add_argument("--all", action="store_true", help="list the exact ones too")
+    t.add_argument("--json", action="store_true")
+    t.set_defaults(func=cmd_roundtrip)
 
     v = sub.add_parser("survey", help="triage a real document")
     v.add_argument("pdf")

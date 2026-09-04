@@ -26,7 +26,7 @@ from __future__ import annotations
 
 from typing import Any, Callable, Optional
 
-from ..fonts.symbols import NEUTRAL_DELIMITERS, Role
+from ..fonts.symbols import AtomClass, NEUTRAL_DELIMITERS, Role
 from ..geometry.bbox import BBox
 from ..tree.nodes import Delimited, MathNode, Provenance, Row
 from .context import Explanation, ParseContext
@@ -174,4 +174,6 @@ def _build(op: Unit, cl: Unit, inner: list[Unit], ctx: ParseContext,
     ctx.trace.add(Explanation("delimited", node.node_id,
                               {"open": op.node.node_id, "close": cl.node.node_id},
                               conf, ev))
-    return Unit.composite(node, baseline, box, max(op.size, cl.size), gids, rids)
+    # \\left ... \\right produces an Inner atom (TeXbook, chapter 17).
+    return Unit.composite(node, baseline, box, max(op.size, cl.size), gids, rids,
+                          atom=AtomClass.INNER)

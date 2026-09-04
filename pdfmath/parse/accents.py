@@ -19,7 +19,7 @@ from __future__ import annotations
 
 from typing import Any, Optional
 
-from ..fonts.symbols import Role
+from ..fonts.symbols import AtomClass, Role
 from ..geometry.bbox import BBox
 from ..tree.nodes import Accent, Provenance
 from .context import Explanation, ParseContext
@@ -134,6 +134,7 @@ def _build(base: Unit, acc: Unit, ctx: ParseContext) -> Unit:
     ctx.trace.add(Explanation("accent", node.node_id,
                               {"base": base.node.node_id, "accent": tex},
                               conf, ev))
+    # make_math_accent leaves the nucleus's class alone.
     return Unit.composite(node, base.baseline, box, base.size, gids, rids,
                           italic=base.italic, x0=base.x0, x1=base.x1,
-                          lead=base.lead, trail=base.trail)
+                          lead=base.lead, trail=base.trail, atom=base.atom)

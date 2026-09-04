@@ -111,7 +111,7 @@ def _text_column(lines: list[_Line], body: float) -> tuple[float, float, bool]:
     Prose lines run margin to margin and are the most common shape on the page, so the
     widest line that is *not* math-heavy defines the column a display is inset from.
     """
-    prose = [ln for ln in lines if ln.math_ratio < 0.3 and len(ln.glyphs) > 5]
+    prose = [ln for ln in lines if ln.math_ratio < 0.45 and len(ln.glyphs) > 5]
     pool = prose or lines
     if not pool:
         return (0.0, 1.0, False)
@@ -136,8 +136,14 @@ def find_displayed_equations(extract: PageExtract,
     # test PDF presents, and the geometric tests have to be skipped rather than failed.
     single_block = len(lines) < 2 or not has_prose
 
+    # A line is prose if it is not math-heavy enough to be a display in its own right
+    # and it runs most of the way across the column.  The threshold has to be the *same*
+    # one used to accept a display, or the last line of a paragraph -- which is short and
+    # often ends in mathematics -- falls between the two tests and gets swept into the
+    # display above it, prose and all.
     prose_lines = [ln for ln in lines
-                   if ln.math_ratio < 0.3 and ln.bbox.width > 0.6 * col_w]
+                   if ln.math_ratio < min_math_ratio
+                   and ln.bbox.width > 0.5 * col_w and len(ln.glyphs) > 5]
 
     def inside_a_paragraph_line(ln: _Line) -> bool:
         """Does this baseline sit *within* a line of prose?
@@ -162,6 +168,16 @@ def find_displayed_equations(extract: PageExtract,
         }
         if ln.math_ratio < min_math_ratio and not ln.rules:
             ev["rejected"] = "not enough material from math fonts"
+            return False, ev
+        # A displayed equation is set at the document's text size.  A line whose largest
+        # glyph is script-size is a *piece* of something -- a row of subscripts, a
+        # detached limit -- and reporting it as a formula in its own right produces
+        # fragments that begin in the middle of an expression.  Such lines still join a
+        # display through the growth step below; they just cannot start one.
+        biggest = max((g.size for g in ln.glyphs), default=body)
+        ev["largest_glyph_pt"] = round(biggest, 3)
+        if ln.glyphs and biggest < 0.85 * body:
+            ev["rejected"] = "script-size throughout: a fragment, not a display"
             return False, ev
         if not single_block and inside_a_paragraph_line(ln):
             ev["rejected"] = "overlaps a line of prose: inline, not displayed"
@@ -241,6 +257,8 @@ def find_displayed_equations(extract: PageExtract,
         # is not its fonts but that it sits inside the display's own vertical extent.
         # Prose is not absorbed this way: \abovedisplayskip keeps it clear of the box.
         def overlaps(k: int, lo: int, hi: int) -> bool:
+            if lines[k] in prose_lines:
+                return False        # a paragraph line is never part of a display
             box = BBox.union([lines[m].bbox for m in range(lo, hi)])
             if box is None or lines[k].bbox.overlap_y(box) <= 0:
                 return False

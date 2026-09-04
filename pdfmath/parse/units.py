@@ -68,6 +68,12 @@ class Unit:
     axis_normalised: bool = False        # axis centring already undone (see parse.axis)
     lead: float = 0.0                    # invisible advance TeX put *before* the ink
     trail: float = 0.0                   # ... and after it (italic kern, \scriptspace)
+    #: The atom class of the *structure*, for composites that have no glyph of their
+    #: own.  TeX gives a fraction and a \left...\right group the class Inner and a
+    #: radical the class Ord, and those classes decide the glue around them -- so a
+    #: composite that reported Ord by default would make every space after a summation
+    #: sign look unexplained.
+    atom_override: Optional[AtomClass] = None
     glyph_ids: list[int] = field(default_factory=list)
     rule_ids: list[int] = field(default_factory=list)
 
@@ -105,6 +111,8 @@ class Unit:
 
     @property
     def atom(self) -> AtomClass:
+        if self.atom_override is not None:
+            return self.atom_override
         s = self.symbol
         return s.atom if s else AtomClass.ORD
 
@@ -132,7 +140,8 @@ class Unit:
                   glyph_ids: Sequence[int] = (), rule_ids: Sequence[int] = (),
                   italic: float = 0.0, x0: Optional[float] = None,
                   x1: Optional[float] = None, lead: float = 0.0,
-                  trail: float = 0.0) -> "Unit":
+                  trail: float = 0.0,
+                  atom: Optional[AtomClass] = None) -> "Unit":
         """``x0``/``x1`` override the ink extent when TeX's *box* is narrower.
 
         An accent is the case that matters: ``make_math_accent`` sets the vbox's width
@@ -143,6 +152,7 @@ class Unit:
                     x1=box.x1 if x1 is None else x1, baseline=baseline,
                     height=box.y1 - baseline, depth=baseline - box.y0,
                     size=size, italic=italic, is_char=False, lead=lead, trail=trail,
+                    atom_override=atom,
                     glyph_ids=list(glyph_ids), rule_ids=list(rule_ids))
 
 

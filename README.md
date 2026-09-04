@@ -71,6 +71,31 @@ That last line is the one that matters. Those documents mostly do not carry the 
 Unicode-first extractor needs; knowing that `CMMI10 + 0x78` is `x` is what makes them
 readable at all. `pdfmath survey paper.pdf` produces the report.
 
+## The stronger check: recompile it
+
+A decompiler is validated by recompiling. `pdfmath roundtrip` serialises the recovered
+tree back to LaTeX, runs pdfTeX on it, and compares the glyphs with the ones it started
+from. If every glyph lands in the same place relative to its neighbours, the structure we
+recovered is one TeX compiles to the original page. No ground truth, no second system —
+so unlike `benchmark` it works on real documents.
+
+```
+                    milestone   extended   random (held out)   real papers
+recompiles exactly   17 / 17    58 / 58      94% - 95%           3.9%
+```
+
+That last number is the important one, and it is much worse than the confidence scores
+suggested. The oracle says why: of 127 detected equations in the arXiv preprints, five
+recompile identically, twenty come back with the right glyphs in slightly wrong places,
+and ninety come back with *different glyphs* — overwhelmingly because the region was not
+a single displayed equation (a fragment, an `eqnarray` spanning several lines, an equation
+number swept in) or because a `\left(` in the original was sized by content we failed to
+recover. Equations of ten glyphs or fewer reach 25%; larger ones do not yet reach any.
+
+So: the synthetic corpus is solved, and real documents are not. The gap is mostly
+*detection* and complex real-world structures, not the Appendix G inversion — and having
+a number for it rather than a confidence score is the point of building the oracle.
+
 ## Quickstart
 
 ```bash
@@ -81,6 +106,8 @@ pdfmath debug-svg paper.pdf --page 3 --html -o p3.html
 pdfmath extract   paper.pdf --page 3 --mathml
 pdfmath extract   paper.pdf --page 3 --bbox 120,480,400,520 --mathml
 pdfmath explain   paper.pdf --page 3 --node 17
+pdfmath roundtrip paper.pdf --pages 3 4 5          # recompile and compare
+pdfmath survey    paper.pdf --floor 0.9            # triage what is unresolved
 pdfmath benchmark --suite all --n 500
 pdfmath fonts     CMEX10 --code 0x58
 ```

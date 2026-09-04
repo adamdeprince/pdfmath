@@ -27,7 +27,7 @@ from typing import Any, Iterable, Optional, Sequence
 
 from ..extraction.model import Glyph, PageExtract, Rule
 from ..fonts.mathparams import Style
-from ..fonts.symbols import Role
+from ..fonts.symbols import AtomClass, Role
 from ..geometry.bbox import BBox
 from ..tree.nodes import (Fraction, MathNode, Overline, Provenance, Radical, Row,
                           Underline)
@@ -235,9 +235,11 @@ def _build_fraction(a: _Anchor, ctx: ParseContext) -> Optional[Unit]:
                                "denominator": den_node.node_id, "rule": r.id},
                               conf, ev))
     baseline = r.y_center - fctx.params.axis_height
+    # A fraction is an Inner atom (TeXbook, chapter 17), which is why a relation after
+    # one takes a thick space rather than none.
     return Unit.composite(node, baseline, box, fctx.size, gids, rids,
                           lead=ctx.null_delimiter_space,
-                          trail=ctx.null_delimiter_space)
+                          trail=ctx.null_delimiter_space, atom=AtomClass.INNER)
 
 
 def _build_radical(a: _Anchor, ctx: ParseContext) -> Optional[Unit]:
@@ -276,7 +278,12 @@ def _build_radical(a: _Anchor, ctx: ParseContext) -> Optional[Unit]:
                               {"radicand": rad_node.node_id, "surd_glyphs": surd.ids,
                                "overbar_rule": ob.id}, conf, ev))
     baseline = rad_baseline if rad_baseline is not None else box.y0
-    return Unit.composite(node, baseline, box, surd.head.size, gids, rids)
+    # \root sets the index after a \mkern5mu, so the box starts 5 mu to the left of
+    # the index's ink.  Without that, the gap to whatever precedes the radical measures
+    # 5 mu too wide and looks like a space the author asked for.
+    lead = (5.0 / 18.0 * (ctx.params.quad or ctx.size)) if index_runs else 0.0
+    return Unit.composite(node, baseline, box, surd.head.size, gids, rids,
+                          atom=AtomClass.ORD, lead=lead)
 
 
 def _build_line_over_under(a: _Anchor, ctx: ParseContext) -> Optional[Unit]:
@@ -317,7 +324,8 @@ def _build_line_over_under(a: _Anchor, ctx: ParseContext) -> Optional[Unit]:
     node.prov = Provenance(gids, rids, box, conf, ev, a.kind)
     ctx.trace.add(Explanation(a.kind, node.node_id,
                               {"base": node_inner.node_id, "rule": r.id}, conf, ev))
-    return Unit.composite(node, baseline, box, bctx.size, gids, rids)
+    return Unit.composite(node, baseline, box, bctx.size, gids, rids,
+                          atom=AtomClass.ORD)
 
 
 # ------------------------------------------------------------------------- top level
