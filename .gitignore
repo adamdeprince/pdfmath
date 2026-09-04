@@ -18,3 +18,11 @@ corpus/arxiv/
 # Node bridge to the speech engine (npm install in tools/sre)
 tools/sre/node_modules/
 tools/sre/package-lock.json
+
+# Built by the README tutorial from examples/sample.tex
+examples/*.pdf
+examples/*.aux
+examples/*.log
+
+# Hypothesis's local example cache
+.hypothesis/

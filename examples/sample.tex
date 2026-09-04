@@ -1,0 +1,32 @@
+% A small born-digital TeX document, used by the tutorial in README.md.
+%
+% Build it with:
+%     pdflatex -output-directory=examples examples/sample.tex
+%
+% Three displayed equations, which the detector finds, and one inline formula in the
+% last paragraph, which it does not -- inline mathematics is out of scope for detection,
+% so the tutorial uses it to show --bbox.
+\documentclass[11pt]{article}
+\usepackage{amsmath,amssymb}
+\pagestyle{empty}
+\begin{document}
+
+The quantity we care about is
+\[
+E = \frac{x_i^2}{\sqrt{y}}
+\]
+and its partial sums converge,
+\[
+\sum_{k=1}^{n} \frac{1}{k^2} = \frac{\pi^2}{6} - \varepsilon_n .
+\]
+For a linear map we write
+\[
+A = \begin{pmatrix} a & b \\ c & d \end{pmatrix},
+\qquad
+\det A = ad - bc .
+\]
+
+Inline formulae are not detected, only displayed ones. This sentence
+contains $\sqrt{a^2 + b^2}$ so the tutorial has something to point at.
+
+\end{document}

@@ -202,6 +202,19 @@ CASES = [
 ]
 
 
+#: Found by the property test, minimised, and still open.  A fraction bar claims its
+#: numerator (driver step 2) long before matrix rows are segmented (step 8), so in a
+#: single-column matrix the search walks straight up into the row above.  It needs the
+#: numerator claim to respect a baselineskip-sized gap, which is measurable -- a real
+#: numerator sits at num1/num2, a row above sits a full baselineskip up -- but it is a
+#: change to anchor claiming, not a patch.  Strict xfail: this fails when it is fixed.
+KNOWN_OPEN = [
+    ("matrix-row-eaten-by-fraction-numerator",
+     Mat(((Ident("a"),), (Frac(Ident("a"), Sqrt(Ident("a"))),)), "pmatrix"),
+     "single-column matrix, fraction below the first row"),
+]
+
+
 @pytest.fixture(scope="module")
 def report(tmp_path_factory):
     return run([e for _, e, _ in CASES],
@@ -215,6 +228,20 @@ def test_regression(report, index, name):
     assert case.error is None, f"{name}: {case.error}"
     assert case.exact, (f"{name} ({rationale})\n  {case.tex}\n"
                         f"  expected {case.expected}\n  actual   {case.actual}")
+
+
+@pytest.mark.xfail(strict=True, reason="open: see KNOWN_OPEN")
+@pytest.mark.parametrize("name,expr,shape", KNOWN_OPEN)
+def test_known_open(name, expr, shape, tmp_path_factory):
+    case = run([expr], workdir=str(tmp_path_factory.mktemp("open"))).cases[0]
+    assert case.exact, f"{name} ({shape})"
+
+
+def test_a_known_open_case_still_keeps_every_glyph(tmp_path_factory):
+    """Wrong structure is a bug; a lost glyph would be a different and worse one."""
+    for name, expr, _ in KNOWN_OPEN:
+        case = run([expr], workdir=str(tmp_path_factory.mktemp("openglyph"))).cases[0]
+        assert case.glyphs_in_tree == case.glyphs_extracted, f"{name}: glyph lost"
 
 
 def test_nothing_is_ever_dropped(report):

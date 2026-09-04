@@ -89,12 +89,14 @@ Established empirically on stock pdfTeX 1.40.29 output; see `docs/prior-art.md` 
 | `latex/data/tex_commands.py` | generated from LaTeX's own \DeclareMathSymbol tables |
 | `asciimath/serializer.py` | AsciiMath, a linear syntax that survives magnification |
 | `omml/serializer.py` | Office MathML — what a `.docx` stores, so Word can edit it |
+| `wordperfect/serializer.py` | the WordPerfect 5.1 equation language |
 | `speech/engine.py` | bridge to MathJax's speech-rule-engine (ClearSpeak / MathSpeak) |
 | `eval/roundtrip.py` | recompile and compare |
 | `eval/mathml_compare.py` | read MathML back into a comparison signature |
 | `eval/latexml.py` | LaTeXML as an independent oracle |
 | `eval/asciimath_roundtrip.py` | py-asciimath reads our AsciiMath back |
 | `eval/omml_roundtrip.py` | pandoc opens a Word package we build and reads the OMML back |
+| `examples/sample.tex` | the document the README tutorial works on |
 | `eval/arxiv_eval.py` | score against a paper's own source |
 | `corpus/arxiv.py` | fetch an e-print, split out its displays |
 | `detection/equations.py` | geometric displayed-equation detection |
@@ -214,13 +216,24 @@ Each of these is a real failure with a known cause, not a mystery.
    as evidence rather than checking it. Parsing lig/kern would make accents exact.
 5. **Inline mathematics is not detected**, only displayed equations. The decompiler itself
    is style-agnostic; pass `--bbox` for inline formulae.
-6. **`\lim`-style operators lose their under-limit.** `\lim_{x \to 0}` sets `lim` as an
+6. **A fraction below the first row of a single-column matrix eats the row above.**
+   `\begin{pmatrix} a \\ \frac{a}{\sqrt a} \end{pmatrix}` comes back as one fraction whose
+   numerator is `a a`. Fraction bars claim their regions at step 2 of the parse order,
+   long before matrix rows are segmented at step 8, so the numerator search has nothing
+   to stop it at a row boundary. The evidence to fix it is measurable — a real numerator
+   sits at `num1`/`num2` above the axis, while a row above sits a full `\baselineskip` up
+   — but acting on it changes anchor claiming rather than patching a recogniser. Found by
+   the property test, minimised, and pinned as a strict xfail in `KNOWN_OPEN`
+   (`tests/regression/test_regressions.py`); the fuzzer skips the shape so it can find
+   new bugs instead of this one. Confidence drops to 0.54, so the parser does report that
+   it is unsure, and no glyph is lost.
+7. **`\lim`-style operators lose their under-limit.** `\lim_{x \to 0}` sets `lim` as an
    upright Op with its limit centred below, exactly as `\sum` does, but the operator is a
    word from cmr rather than a cmex glyph, so `operators.py` does not recognise it as a
    limit-bearing base and the subscript is attached to whatever precedes it. The fix is to
    let the large-operator recogniser accept a multi-letter upright Op; the geometry is
    already measured.
-7. **Non-TeX fonts degrade to ToUnicode**, flagged as `unicode_source: "tounicode"`, with
+8. **Non-TeX fonts degrade to ToUnicode**, flagged as `unicode_source: "tounicode"`, with
    metrics from the PDF's `/Widths`. Structure recovery still works but the residuals stop
    being meaningful.
 
@@ -355,6 +368,13 @@ downstream reads it. So each writer is checked against a reader that is not ours
 | LaTeX | pdfTeX, glyph by glyph | 58/58 glyph-identical |
 | AsciiMath | `py-asciimath` | 57/58 (the one is that library's missing `tilde`) |
 | OMML | pandoc's `docx` reader | 58/58 |
+| WordPerfect 5.1 | *none available* | goldens only |
+
+WordPerfect is the exception and is worth stating plainly: nothing available parses the
+5.1 equation language, so that writer has no independent reader and rests on goldens.
+Its core grammar is taken from a citable reference; the accent commands and the Greek
+case convention are not, and are listed in `UNVERIFIED` so the output can report which
+of its commands are believed rather than sourced.
 
 Each comparison folds the distinctions the target format genuinely cannot carry, and each
 fold is named and justified in the oracle module rather than applied quietly. AsciiMath,

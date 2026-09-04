@@ -136,6 +136,14 @@ def cmd_extract(args: argparse.Namespace) -> int:
                 entry["asciimath"] = am.asciimath
                 if am.unreproducible:
                     entry["asciimath_unreproducible"] = am.unreproducible
+            if args.wpeq:
+                from ..wordperfect.serializer import to_wpeq
+                wp = to_wpeq(tree)
+                entry["wpeq"] = wp.wpeq
+                if wp.unreproducible:
+                    entry["wpeq_unreproducible"] = wp.unreproducible
+                if wp.unverified:
+                    entry["wpeq_unverified"] = wp.unverified
             if args.omml:
                 from ..omml.serializer import to_omml
                 om = to_omml(tree, indent=not args.compact, display=True)
@@ -191,7 +199,7 @@ def cmd_extract(args: argparse.Namespace) -> int:
 
 #: Output formats that are text a person can read straight out of the terminal.  When
 #: exactly one is asked for, it is printed bare rather than wrapped in JSON.
-_TEXT_FORMATS = ("mathml", "latex", "asciimath", "omml", "speech")
+_TEXT_FORMATS = ("mathml", "latex", "asciimath", "omml", "wpeq", "speech")
 
 
 def _requested(args: argparse.Namespace) -> bool:
@@ -610,6 +618,8 @@ def build_parser() -> argparse.ArgumentParser:
                    help="include AsciiMath, a linear syntax that stays readable")
     e.add_argument("--omml", action="store_true",
                    help="include Office MathML, the equation format Word stores")
+    e.add_argument("--wpeq", action="store_true",
+                   help="include the WordPerfect 5.1 equation language")
     e.add_argument("--speech", action="store_true",
                    help="include a spoken rendering (needs tools/sre; see `speak`)")
     e.add_argument("--speech-style", choices=SPEECH_DOMAINS, default="clearspeak",
