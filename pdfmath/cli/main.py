@@ -614,8 +614,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     e = sub.add_parser("extract", help="decompile equations to MathML")
     add_common(e)
-    e.add_argument("--inline", action="store_true",
-                   help="also find formulas inside paragraphs, not just displays")
+    e.add_argument("--no-inline", dest="inline", action="store_false", default=True,
+                   help="only find displayed equations, not formulas inside paragraphs")
     e.add_argument("--mathml", action="store_true", help="print MathML only")
     e.add_argument("--latex", action="store_true", help="include LaTeX")
     e.add_argument("--asciimath", action="store_true",
@@ -650,8 +650,8 @@ def build_parser() -> argparse.ArgumentParser:
     k.add_argument("--bbox-bp", action="store_true",
                    help="interpret --bbox in PDF big points instead")
     k.add_argument("--style", choices=[s.name.lower() for s in Style], default="display")
-    k.add_argument("--inline", action="store_true",
-                   help="also read formulas inside paragraphs, not just displays")
+    k.add_argument("--no-inline", dest="inline", action="store_false", default=True,
+                   help="only read displayed equations, not formulas inside paragraphs")
     k.add_argument("--rules", choices=SPEECH_DOMAINS, default="clearspeak",
                    help="clearspeak reads naturally; mathspeak is unambiguous")
     k.add_argument("--verbosity", choices=SPEECH_STYLES, default="default",

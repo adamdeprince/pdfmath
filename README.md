@@ -77,19 +77,12 @@ $ pdfmath extract examples/sample.pdf --asciimath
 E = (x_i^2)/(sqrt(y))
 sum_(k = 1)^n (1)/(k^2) = (pi^2)/(6) - epsilon_n.
 A = ((a,b),(c,d)), quad det A = a d - b c.
-```
-
-No page number, no coordinates: the detector found the three displays on its own. The
-sample also has a formula *inside* a sentence, which is a different problem and needs
-asking for:
-
-```bash
-$ pdfmath extract examples/sample.pdf --inline --asciimath
-E = (x_i^2)/(sqrt(y))
-sum_(k = 1)^n (1)/(k^2) = (pi^2)/(6) - epsilon_n.
-A = ((a,b),(c,d)), quad det A = a d - b c.
 sqrt(a^2 + b^2)
 ```
+
+No page number, no coordinates. Three of those are displayed equations, found by their
+shape; the fourth is inside a sentence, found by a different method entirely — see below.
+Pass `--no-inline` for displays only.
 
 Ask for MathML instead and you get the real target format:
 
@@ -118,9 +111,10 @@ $ pdfmath speak examples/sample.pdf
 E equals the fraction with numerator x sub i squared and denominator the square root of y
 the sum from k equals 1 to n of the fraction with numerator 1 and denominator k squared equals the fraction with numerator pi squared and denominator 6 minus epsilon sub n period
 A equals the 2 by 2 matrix Row 1: a b Row 2: c d comma determinant A equals a d minus b c period
+the square root of a squared plus b squared
 ```
 
-That is ClearSpeak, which reads the way a person would say it. MathSpeak is unambiguous
+The last line is the formula from inside the sentence. That is ClearSpeak, which reads the way a person would say it. MathSpeak is unambiguous
 and reversible instead — what you want when checking someone else's algebra:
 
 ```bash
@@ -161,11 +155,13 @@ $ pdfmath extract examples/sample.pdf --latex
 E = \frac{x_{i}^{2}}{\sqrt{y}}
 \sum\limits_{k = 1}^{n} \frac{1}{k^{2}} = \frac{\pi^{2}}{6} - \varepsilon_{n} .
 A = \left( \begin{matrix} a & b \\ c & d \end{matrix} \right) , \mskip 39.006mu \mathrm{det} \mskip 2.988mu A = a d - b c .
+\sqrt{a^{2} + b^{2}}
 
 $ pdfmath extract examples/sample.pdf --wpeq
 E = {x sub i sup 2} over {sqrt {y}}
 sum from {k = 1} to n {1} over {k sup 2} = {pi sup 2} over {6} - epsilon sub n .
 A = left ( matrix {a & b # c & d} right ) , ~ det ` A = a d - b c .
+sqrt {a sup 2 + b sup 2}
 ```
 
 The LaTeX writer aims to recompile to the identical page rather than to look idiomatic,
@@ -179,7 +175,7 @@ The sample's last sentence also names a vector `$\mathbf{v}$`, and nothing finds
 found. Give it the box directly:
 
 ```bash
-$ pdfmath extract examples/sample.pdf --bbox 212,446,222,456 --style text --asciimath
+$ pdfmath extract examples/sample.pdf --bbox 178,446,186,456 --style text --asciimath
 v
 ```
 
@@ -211,6 +207,13 @@ same baseline, in the same paragraph. What it has instead is TeX's own bookkeepi
 What it cannot do is find a formula containing no math-font glyph at all: `$\mathbf{v}$`
 is cmbx and so is bold prose; `$2$` is a roman digit and so is a page number. Those are
 undecidable rather than hard — TeX threw the distinction away — and they are left alone.
+
+**Which is why this is on by default.** A missed inline formula is not silence: its
+characters are still there and are still read. And the formulas this method misses are
+exactly the ones made entirely of ordinary characters, so reading them as characters is
+already right — `$\mathbf{v}$` says "v", which is what it is. The asymmetry runs the
+other way from most detection problems: finding one is a large gain, missing one costs
+nothing, and only a false positive would do harm. `--no-inline` turns it off.
 
 ### 6. Ask why
 
@@ -346,8 +349,8 @@ fonts, displayed equations, display and text style, fractions, scripts, radicals
 delimiters (including built-up cmex assemblies), large operators with limits, matrices,
 accents, over/underlines, and the inter-atom spacing table.
 
-Inline formulas are found with `--inline`, from the fonts TeX switched to and the glue it
-inserted rather than from any shape on the page.
+Inline formulas are found by default, from the fonts TeX switched to and the glue it
+inserted rather than from any shape on the page; `--no-inline` restricts to displays.
 
 Not yet: numbered displays reliably detected, XeTeX/LuaTeX OpenType math, Type 3 fonts, scanned pages (out of scope by
 design), `\overbrace`-style horizontal braces, and alignment recovery in `align` beyond a

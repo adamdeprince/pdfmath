@@ -215,8 +215,7 @@ Each of these is a real failure with a known cause, not a mystery.
    the nucleus and the font's `\skewchar`, which lives in the TFM's lig/kern program — the
    one part of the TFM this reader skips. The accent recogniser therefore reports the skew
    as evidence rather than checking it. Parsing lig/kern would make accents exact.
-5. **A formula with no math-font glyph in it cannot be found.** Inline detection
-   (`--inline`) seeds on cmmi/cmsy/cmex, which cannot occur outside mathematics, and grows
+5. **A formula with no math-font glyph in it cannot be found.** Inline detection seeds on cmmi/cmsy/cmex, which cannot occur outside mathematics, and grows
    outward through the roman characters that do occur inside formulas. A formula made
    *entirely* of roman characters has no seed: `$\mathbf{v}$` is cmbx and so is bold
    prose, `$2$` is a roman digit and so is a page number. These are undecidable rather
@@ -292,6 +291,14 @@ Two details cost more effort than they look:
 
 Every region carries the style it was set in, because an inline formula is text style and
 every Appendix G prediction differs between text and display.
+
+**Why this runs by default.** Detection usually trades misses against false positives,
+but not here. A formula this method misses is one made entirely of ordinary roman
+characters, and those characters are still on the page and still read — `$\mathbf{v}$`
+comes out as "v", which is correct. So a miss costs nothing that was not already lost,
+while a hit turns "square root a 2 plus b 2" into "the square root of a squared plus b
+squared". Only a false positive would do damage, and the seed rule makes one impossible
+without a glyph from a math font. `--no-inline` restricts to displays.
 
 ## Inverting TeX's spacing: the result
 

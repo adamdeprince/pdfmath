@@ -111,6 +111,28 @@ def _leading(baselines: Sequence[float]) -> float:
     return statistics.median(steps) if steps else 12.0
 
 
+def _outside(extract: PageExtract, boxes: Sequence[BBox]) -> PageExtract:
+    """The page with everything belonging to a displayed equation removed.
+
+    A display's limits and scripts sit on baselines of their own, several points from
+    any line of prose and often too sparse to be a line in their own right, so left in
+    place they attach themselves to whichever paragraph happens to be nearest -- a sum's
+    ``k = 1`` landing in the middle of the sentence below it.  They are already accounted
+    for by the display that owns them.
+    """
+    if not boxes:
+        return extract
+    def keep(box: BBox) -> bool:
+        cx, cy = box.cx, box.cy
+        return not any(b.x0 <= cx <= b.x1 and b.y0 <= cy <= b.y1 for b in boxes)
+    return extract.__class__(
+        page=extract.page,
+        glyphs=[g for g in extract.glyphs if keep(g.bbox)],
+        rules=[r for r in extract.rules if keep(r.bbox)],
+        **{k: v for k, v in vars(extract).items()
+           if k not in {"page", "glyphs", "rules"}})
+
+
 def _lines(extract: PageExtract, body: float) -> list[_Line]:
     """Group glyphs into prose lines, scripts and tall symbols included.
 
@@ -145,12 +167,14 @@ def _lines(extract: PageExtract, body: float) -> list[_Line]:
             nearest = min(spanning, key=lambda ln: abs(ln.baseline - g.y))
         else:
             nearest = min(lines, key=lambda ln: abs(ln.baseline - g.y))
-            if abs(nearest.baseline - g.y) > lead * 0.9:
+            # Half the leading, not most of it: a script or a numerator strays a few
+            # points from its line, and anything further away belongs to another one.
+            if abs(nearest.baseline - g.y) > lead * 0.5:
                 continue
         nearest.glyphs.append(g)
     for r in extract.rules:
         nearest = min(lines, key=lambda ln: abs(ln.baseline - r.bbox.cy))
-        if abs(nearest.baseline - r.bbox.cy) <= lead * 0.9:
+        if abs(nearest.baseline - r.bbox.cy) <= lead * 0.5:
             nearest.rules.append(r)
     return [ln for ln in lines if ln.glyphs]
 
@@ -280,6 +304,9 @@ def find_inline_math(extract: PageExtract, body_size: Optional[float] = None,
     if not extract.glyphs:
         return []
     body = body_size or _body_text_size(list(extract.glyphs))
+    extract = _outside(extract, list(exclude))
+    if not extract.glyphs:
+        return []
     # The math quad is only needed for the fallback bound, and a text-size quad is the
     # right one: an inline formula is set in text style by definition.
     quad = body
