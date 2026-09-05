@@ -30,6 +30,7 @@ DOCUMENT = r"""
 \pagestyle{empty}
 \begin{document}
 \noindent
+See~[4, \S6] for the argument, and Hamilton\dag{} for the original.
 Let $x$ be a point and let $f(x)$ denote its image under $f$.
 We showed in 2024 that $n = 1$ holds whenever $x + y \le 3$ and
 $\alpha \in \Omega$. Theorem 2.1 states that $\log n$ grows and
@@ -106,6 +107,15 @@ def test_a_sentence_period_is_not_part_of_the_formula(found):
 
 
 # ------------------------------------------------------------------ false positives
+
+def test_a_section_sign_in_a_citation_is_not_mathematics(found):
+    r"""TeX takes ``\S`` and ``\dag`` from cmsy in text mode too, so a purely
+    encoding-based seed rule turns "[4, \S6]" into a formula and swallows the
+    bracket and the number with it."""
+    assert not any("\u00a7" in f for f in found)
+    assert not any("\u2020" in f for f in found)
+    assert not any("4," in f for f in found)
+
 
 def test_a_year_in_prose_is_not_mathematics(found):
     assert not any("2024" in f for f in found)

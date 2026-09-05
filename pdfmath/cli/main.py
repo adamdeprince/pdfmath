@@ -304,6 +304,9 @@ def cmd_roundtrip(args: argparse.Namespace) -> int:
     same place relative to its neighbours -- that is, the structure we recovered is one
     TeX compiles to the page we started from.
     """
+    # Displays only, deliberately: roundtrip is the evaluation oracle and
+    # its published numbers are defined over displayed equations, so
+    # widening it would silently move them.
     from ..detection.equations import find_displayed_equations
     from ..eval.roundtrip import roundtrip
 
@@ -368,7 +371,7 @@ def cmd_survey(args: argparse.Namespace) -> int:
     Each of those is a lead, and the intended next step is to reproduce it as a
     *synthetic* case rather than to special-case the document.
     """
-    from ..detection.equations import find_displayed_equations
+    from ..detection import find_equations
     from ..tree.nodes import Space, Unknown
 
     style = _style(args.style)
@@ -379,8 +382,8 @@ def cmd_survey(args: argparse.Namespace) -> int:
     weakest: dict[str, int] = {}
 
     for page in pages:
-        for region in find_displayed_equations(page):
-            src, tree, ctx = _parse_region(page, region.bbox, style)
+        for region in find_equations(page, inline=args.inline):
+            src, tree, ctx = _parse_region(page, region.bbox, _style(region.style))
             in_tree = {g for n in tree.walk() for g in n.prov.glyph_ids}
             missing = sorted({g.id for g in src.glyphs} - in_tree)
             unknowns = [n for n in tree.walk() if isinstance(n, Unknown)]
@@ -707,6 +710,8 @@ def build_parser() -> argparse.ArgumentParser:
                    help="1-based page numbers; default every page")
     v.add_argument("--style", default="display",
                    choices=["display", "text", "script", "scriptscript"])
+    v.add_argument("--no-inline", dest="inline", action="store_false", default=True,
+                   help="only displayed equations, not formulas inside paragraphs")
     v.add_argument("--floor", type=float, default=0.9,
                    help="report structural inferences below this confidence")
     v.add_argument("--show", type=int, default=8,

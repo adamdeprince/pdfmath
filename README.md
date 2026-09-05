@@ -352,7 +352,9 @@ accents, over/underlines, and the inter-atom spacing table.
 Inline formulas are found by default, from the fonts TeX switched to and the glue it
 inserted rather than from any shape on the page; `--no-inline` restricts to displays.
 
-Not yet: numbered displays reliably detected, XeTeX/LuaTeX OpenType math, Type 3 fonts, scanned pages (out of scope by
+Not yet: displayed equations in two-column layouts (inline formulas are found there
+regardless, because that works line by line), numbered displays reliably detected,
+XeTeX/LuaTeX OpenType math, Type 3 fonts, scanned pages (out of scope by
 design), `\overbrace`-style horizontal braces, and alignment recovery in `align` beyond a
 table of rows. [docs/architecture.md] lists the known limitations with reasons.
 

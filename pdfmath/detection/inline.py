@@ -49,6 +49,13 @@ MATH_ROMAN = set("0123456789+=()[]/.,;:!?*<>|'-")
 #: to an encoding test and has to be named.
 GREEK_CAPITALS = set("ΓΔΘΛΞΠΣΥΦΨΩ")
 
+#: The reverse case: glyphs that live in cmsy but belong to prose.  TeX takes ``\S``,
+#: ``\dag``, ``\ddag`` and ``\P`` from the symbol font in text mode as well as in
+#: maths, so a citation like "[4, §6]" otherwise seeds a formula and swallows the
+#: bracket and the number around it.  They may still be *absorbed* into a formula that
+#: something else has already seeded; they simply may not start one.
+PROSE_IN_MATH_FONT = frozenset({"section", "dagger", "daggerdbl", "paragraph"})
+
 #: Roman letter runs that are mathematics: TeX's own \log-like operators.  A run of these
 #: is absorbed only when the gap to the formula is tighter than the line's interword
 #: space, which is what an operator's thin space looks like.
@@ -181,6 +188,11 @@ def _lines(extract: PageExtract, body: float) -> list[_Line]:
 
 def _is_math_font(g: Glyph) -> bool:
     return g.font.encoding in MATH_ENCODINGS
+
+
+def _is_seed(g: Glyph) -> bool:
+    """Could this glyph only have come from mathematics?  See :data:`PROSE_IN_MATH_FONT`."""
+    return _is_math_font(g) and g.glyph_name not in PROSE_IN_MATH_FONT
 
 
 def _interword(line: _Line, body: float) -> Optional[float]:
@@ -318,7 +330,7 @@ def find_inline_math(extract: PageExtract, body_size: Optional[float] = None,
             continue
         interword = _interword(line, body)
         tight = _tight_gap(interword, quad)
-        seeds = [i for i, g in enumerate(glyphs) if _is_math_font(g)]
+        seeds = [i for i, g in enumerate(glyphs) if _is_seed(g)]
         spans: list[tuple[int, int]] = []
         for seed in seeds:
             if spans and spans[-1][0] <= seed < spans[-1][1]:

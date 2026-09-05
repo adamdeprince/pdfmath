@@ -215,13 +215,21 @@ Each of these is a real failure with a known cause, not a mystery.
    the nucleus and the font's `\skewchar`, which lives in the TFM's lig/kern program — the
    one part of the TFM this reader skips. The accent recogniser therefore reports the skew
    as evidence rather than checking it. Parsing lig/kern would make accents exact.
-5. **A formula with no math-font glyph in it cannot be found.** Inline detection seeds on cmmi/cmsy/cmex, which cannot occur outside mathematics, and grows
+5. **Two-column layouts defeat displayed-equation detection.** `_text_column` takes the
+   extent of the widest prose lines as *the* text column, which on a two-column page spans
+   both of them, so the centred-and-inset tests never fire and no display is found at all.
+   Measured on a pdfTeX-set IEEE-style paper (arXiv 1211.5405): 0 displays across five
+   dense pages, against 122 inline formulas found correctly on the same pages, since
+   inline detection works line by line and does not care about columns. The fix is to
+   cluster line left-edges into columns and run detection within each; the evidence is
+   already in `_lines`. Until then `--bbox` is the answer for a two-column display.
+6. **A formula with no math-font glyph in it cannot be found.** Inline detection seeds on cmmi/cmsy/cmex, which cannot occur outside mathematics, and grows
    outward through the roman characters that do occur inside formulas. A formula made
    *entirely* of roman characters has no seed: `$\mathbf{v}$` is cmbx and so is bold
    prose, `$2$` is a roman digit and so is a page number. These are undecidable rather
    than hard — TeX threw the distinction away when it typeset them identically — so they
    are left alone and `--bbox` is the answer.
-6. **A fraction below the first row of a single-column matrix eats the row above.**
+7. **A fraction below the first row of a single-column matrix eats the row above.**
    `\begin{pmatrix} a \\ \frac{a}{\sqrt a} \end{pmatrix}` comes back as one fraction whose
    numerator is `a a`. Fraction bars claim their regions at step 2 of the parse order,
    long before matrix rows are segmented at step 8, so the numerator search has nothing
@@ -238,7 +246,7 @@ Each of these is a real failure with a known cause, not a mystery.
    limit-bearing base and the subscript is attached to whatever precedes it. The fix is to
    let the large-operator recogniser accept a multi-letter upright Op; the geometry is
    already measured.
-8. **Non-TeX fonts degrade to ToUnicode**, flagged as `unicode_source: "tounicode"`, with
+9. **Non-TeX fonts degrade to ToUnicode**, flagged as `unicode_source: "tounicode"`, with
    metrics from the PDF's `/Widths`. Structure recovery still works but the residuals stop
    being meaningful.
 
