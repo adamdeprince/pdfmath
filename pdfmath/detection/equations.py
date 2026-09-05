@@ -274,7 +274,34 @@ def find_displayed_equations(extract: PageExtract,
             # is narrower than the formula it belongs to, a paragraph line is not.
             return box.contains_x(lines[k].bbox, pad=0.02 * col_w)
 
-        while first > 0 and overlaps(first - 1, first, j):
+        def limit_above(k: int, lo: int, hi: int) -> bool:
+            """A limit set *above* a large operator, outside the operator's own box.
+
+            ``make_op`` centres the operator on the axis and then stacks its limits in a
+            vbox around it, separated by ``big_op_spacing``.  The limit therefore sits
+            clear of the operator's TeX box rather than overlapping it, so the vertical
+            test that finds a superscript never reaches it, and a display whose topmost
+            line is nothing but ``\\infty`` loses it.
+
+            Kept narrow deliberately: only a script-size line, only just above, only
+            inside the display's own horizontal span, and never a line of prose.
+            """
+            if lines[k] in prose_lines:
+                return False
+            box = BBox.union([lines[m].bbox for m in range(lo, hi)])
+            if box is None:
+                return False
+            gap = lines[k].bbox.y0 - box.y1
+            if not 0 <= gap <= 0.35 * body:
+                return False
+            biggest = max((g.size for g in lines[k].glyphs), default=body)
+            if biggest >= 0.85 * body:
+                return False        # a full-size line above is the next thing, not a limit
+            return (box.contains_x(lines[k].bbox, pad=0.02 * col_w)
+                    and lines[k].bbox.width < 0.6 * box.width)
+
+        while first > 0 and (overlaps(first - 1, first, j)
+                             or limit_above(first - 1, first, j)):
             first -= 1
         while j < len(lines) and overlaps(j, first, j):
             j += 1

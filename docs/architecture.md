@@ -215,14 +215,14 @@ Each of these is a real failure with a known cause, not a mystery.
    the nucleus and the font's `\skewchar`, which lives in the TFM's lig/kern program — the
    one part of the TFM this reader skips. The accent recogniser therefore reports the skew
    as evidence rather than checking it. Parsing lig/kern would make accents exact.
-5. **Two-column layouts defeat displayed-equation detection.** `_text_column` takes the
-   extent of the widest prose lines as *the* text column, which on a two-column page spans
-   both of them, so the centred-and-inset tests never fire and no display is found at all.
-   Measured on a pdfTeX-set IEEE-style paper (arXiv 1211.5405): 0 displays across five
-   dense pages, against 122 inline formulas found correctly on the same pages, since
-   inline detection works line by line and does not care about columns. The fix is to
-   cluster line left-edges into columns and run detection within each; the evidence is
-   already in `_lines`. Until then `--bbox` is the answer for a two-column display.
+5. **A document whose mathematics is not in a TeX math font is not detected at all.**
+   `math_ratio` counts glyphs in OML/OMS/OMX, so a paper set in Times with `mathptmx`
+   never reaches the threshold and no display is found. Measured on arXiv 1211.5405,
+   whose body *and* mathematics are Nimbus Roman with only stray Computer Modern
+   symbols: the most math-heavy line on a dense page scores 0.17 against a threshold of
+   0.45. Inline detection fails on the same documents and for the same reason. This is
+   the boundary of the stated scope — Computer Modern first, Latin Modern second — and
+   it is a wall rather than a slope.
 6. **A formula with no math-font glyph in it cannot be found.** Inline detection seeds on cmmi/cmsy/cmex, which cannot occur outside mathematics, and grows
    outward through the roman characters that do occur inside formulas. A formula made
    *entirely* of roman characters has no seed: `$\mathbf{v}$` is cmbx and so is bold

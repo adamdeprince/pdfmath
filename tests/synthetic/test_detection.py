@@ -84,3 +84,63 @@ def test_every_region_is_decompilable(page):
         src = page.in_region(r.bbox)
         in_tree = {g for n in tree.walk() for g in n.prov.glyph_ids}
         assert {g.id for g in src.glyphs} <= in_tree
+
+
+TWO_COLUMN = r"""
+\documentclass[10pt,twocolumn]{article}
+\usepackage{amsmath,amssymb}
+\pagestyle{empty}
+\begin{document}
+Consider a queue whose arrivals are Poisson. The utilisation is
+\[ \rho = \frac{\lambda}{n\mu} \]
+and the expected number in system follows from Little's law. We may
+therefore write the stationary distribution as
+\[ \pi_k = \pi_0 \prod_{j=1}^{k} \frac{\lambda_j}{\mu_j} \]
+which converges whenever the load is small. A more careful treatment gives
+\[ W = \frac{1}{\mu - \lambda} + \sum_{i=1}^{n} \frac{c_i^2}{2} \]
+for the waiting time, and the tail decays exponentially. This holds for
+every positive integer provided the service times are independent.
+Finally we record the identity
+\[ \sum_{k=0}^{\infty} \pi_k = 1 \]
+which closes the system of balance equations for the chain.
+\end{document}
+"""
+
+
+def _compile(tex: str, tmp_path) -> str:
+    import subprocess
+    source = tmp_path / "doc.tex"
+    source.write_text(tex)
+    subprocess.run(["pdflatex", "-interaction=batchmode",
+                    f"-output-directory={tmp_path}", str(source)],
+                   capture_output=True, check=True)
+    return str(tmp_path / "doc.pdf")
+
+
+def test_two_column_displays_are_found(tmp_path):
+    """A narrower column is still a column: nothing in the geometry assumes one.
+
+    The text column is measured from the page's own prose lines, so a two-column layout
+    simply gives a narrower one, and every inset is a ratio of it.
+    """
+    from pdfmath.extraction.pdfminer_backend import extract_page
+    page = extract_page(_compile(TWO_COLUMN, tmp_path), 1)
+    found = find_displayed_equations(page)
+    assert len(found) == 4, [r.confidence for r in found]
+
+
+def test_a_limit_above_a_large_operator_is_not_left_behind(tmp_path):
+    """``make_op`` stacks a limit clear of the operator's own box, so the vertical
+    test that catches a superscript never reaches it, and a display whose topmost line
+    is nothing but the limit loses it."""
+    from pdfmath.extraction.pdfminer_backend import extract_page
+    from pdfmath.fonts.mathparams import Style
+    from pdfmath.latex.serializer import to_latex
+    from pdfmath.parse.driver import parse_region
+
+    page = extract_page(_compile(TWO_COLUMN, tmp_path), 1)
+    recovered = set()
+    for region in find_displayed_equations(page):
+        _, tree, _ = parse_region(page, region.bbox, Style.DISPLAY)
+        recovered.add(to_latex(tree).latex)
+    assert any("\\sum\\limits_{k = 0}^{\\infty}" in r for r in recovered), recovered

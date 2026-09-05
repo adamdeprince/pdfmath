@@ -352,9 +352,12 @@ accents, over/underlines, and the inter-atom spacing table.
 Inline formulas are found by default, from the fonts TeX switched to and the glue it
 inserted rather than from any shape on the page; `--no-inline` restricts to displays.
 
-Not yet: displayed equations in two-column layouts (inline formulas are found there
-regardless, because that works line by line), numbered displays reliably detected,
-XeTeX/LuaTeX OpenType math, Type 3 fonts, scanned pages (out of scope by
+Two-column layouts are fine: the text column is measured from the page's own prose, so a
+narrower one changes nothing.
+
+Not yet: documents whose mathematics is not in a TeX math font (a paper set in Times with
+`mathptmx` is not detected at all, which is the edge of the stated scope rather than a
+slope), numbered displays reliably detected, XeTeX/LuaTeX OpenType math, Type 3 fonts, scanned pages (out of scope by
 design), `\overbrace`-style horizontal braces, and alignment recovery in `align` beyond a
 table of rows. [docs/architecture.md] lists the known limitations with reasons.
 
