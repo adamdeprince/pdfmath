@@ -100,6 +100,7 @@ Established empirically on stock pdfTeX 1.40.29 output; see `docs/prior-art.md` 
 | `eval/arxiv_eval.py` | score against a paper's own source |
 | `corpus/arxiv.py` | fetch an e-print, split out its displays |
 | `detection/equations.py` | geometric displayed-equation detection |
+| `detection/inline.py` | formulas inside a paragraph, from fonts and glue |
 | `debug/{svg,explain}.py` | the debug renderer and `pdfmath explain` |
 | `corpus/` | grammar, generator, compiler, harness, shrinker, Hypothesis strategies |
 
@@ -214,8 +215,13 @@ Each of these is a real failure with a known cause, not a mystery.
    the nucleus and the font's `\skewchar`, which lives in the TFM's lig/kern program — the
    one part of the TFM this reader skips. The accent recogniser therefore reports the skew
    as evidence rather than checking it. Parsing lig/kern would make accents exact.
-5. **Inline mathematics is not detected**, only displayed equations. The decompiler itself
-   is style-agnostic; pass `--bbox` for inline formulae.
+5. **A formula with no math-font glyph in it cannot be found.** Inline detection
+   (`--inline`) seeds on cmmi/cmsy/cmex, which cannot occur outside mathematics, and grows
+   outward through the roman characters that do occur inside formulas. A formula made
+   *entirely* of roman characters has no seed: `$\mathbf{v}$` is cmbx and so is bold
+   prose, `$2$` is a roman digit and so is a page number. These are undecidable rather
+   than hard — TeX threw the distinction away when it typeset them identically — so they
+   are left alone and `--bbox` is the answer.
 6. **A fraction below the first row of a single-column matrix eats the row above.**
    `\begin{pmatrix} a \\ \frac{a}{\sqrt a} \end{pmatrix}` comes back as one fraction whose
    numerator is `a a`. Fraction bars claim their regions at step 2 of the parse order,
@@ -236,6 +242,56 @@ Each of these is a real failure with a known cause, not a mystery.
 8. **Non-TeX fonts degrade to ToUnicode**, flagged as `unicode_source: "tounicode"`, with
    metrics from the PDF's `/Widths`. Structure recovery still works but the residuals stop
    being meaningful.
+
+## Finding inline mathematics
+
+Two detection problems, not one. A displayed equation is found by its *shape*: centred,
+set off, with space above and below. An inline formula has no shape — it is in the middle
+of a sentence, on the same baseline, in the same paragraph — so it is found from what TeX
+left behind instead.
+
+**The font is nearly decisive.** Prose comes from the roman text font, mathematics from
+cmmi, cmsy and cmex. There is no way to type a cmmi glyph outside mathematics, so every
+one is a seed. This catches formulas whose characters are otherwise all roman: the comma
+in `$[0,1]$` comes from cmmi, and it is the only evidence in that formula.
+
+**The gap calibrates itself.** Interword glue stretches and shrinks so a line can be
+justified; math glue does not. The word space is therefore a property of *one line*, and
+measurable from that line's own gaps. Measured on a probe page:
+
+| gap | mu | what it is |
+|---|---|---|
+| 3.90 pt | 6.41 | interword, stretched |
+| 3.70 pt | 6.08 | interword, another line |
+| 3.44 pt | 5.65 | thick (5 mu) plus italic correction |
+| 2.59 pt | 4.26 | medium (4 mu) |
+| 1.97 pt | 3.24 | thin (3 mu), after `\log` |
+
+Every interword space on a line agrees with every other to a hundredth of a point, and
+sits above every math space on it. TeX's interword glue is 6 mu at its natural width and
+the widest automatic math glue is thick at 5 mu, which is why the two never meet; the
+fallback bound, for a line too short to measure, is 5.8 mu.
+
+**The character class settles the rest.** Roman characters occur inside formulas — digits,
+`+`, `=`, parentheses, brackets, capital Greek — so a seed grows through those and stops
+at a roman *letter*. Operator names are the exception: `\log`, `\sin`, `\max` are roman
+letters set as mathematics, recognised as a set and absorbed only when the gap that joins
+them to the formula is tighter than the line's word space, which is what an operator's
+thin space looks like.
+
+Two details cost more effort than they look:
+
+* **A radical sign hangs from a raised reference point**, with almost all of its box below.
+  Clustering glyphs into lines by nearest *baseline* therefore puts a surd on the line
+  above; the box has to be what decides, and a line is only a line when enough full-size
+  glyphs share it, or a tall symbol invents one.
+* **`$f$.` puts the period hard against the `f`** with no space at all, so no gap test can
+  separate them. What settles it is that mathematics does not *end* on a sentence mark:
+  the ends of a run are trimmed, and interior punctuation — the comma in `[0,1]`, the
+  point in `3.14` — is untouched.
+
+Every region carries the style it was set in, because an inline formula is text style and
+every Appendix G prediction differs between text and display.
 
 ## Inverting TeX's spacing: the result
 

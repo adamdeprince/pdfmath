@@ -51,12 +51,18 @@ class EquationRegion:
     confidence: float
     evidence: dict[str, Any] = field(default_factory=dict)
 
+    #: The math style its contents were set in.  A displayed equation is display style
+    #: and an inline one is text style, and every Appendix G prediction differs between
+    #: them, so the region has to carry it to whoever parses it.
+    style: str = "display"
+
     def to_json(self) -> dict[str, Any]:
         return {
             "bbox": [round(v, 4) for v in self.bbox.as_list()],
             "glyph_ids": self.glyph_ids,
             "rule_ids": self.rule_ids,
             "confidence": round(self.confidence, 4),
+            "style": self.style,
             "evidence": self.evidence,
         }
 

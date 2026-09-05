@@ -79,8 +79,19 @@ sum_(k = 1)^n (1)/(k^2) = (pi^2)/(6) - epsilon_n.
 A = ((a,b),(c,d)), quad det A = a d - b c.
 ```
 
-No page number, no coordinates: the detector found the three displays on its own. Ask for
-MathML instead and you get the real target format:
+No page number, no coordinates: the detector found the three displays on its own. The
+sample also has a formula *inside* a sentence, which is a different problem and needs
+asking for:
+
+```bash
+$ pdfmath extract examples/sample.pdf --inline --asciimath
+E = (x_i^2)/(sqrt(y))
+sum_(k = 1)^n (1)/(k^2) = (pi^2)/(6) - epsilon_n.
+A = ((a,b),(c,d)), quad det A = a d - b c.
+sqrt(a^2 + b^2)
+```
+
+Ask for MathML instead and you get the real target format:
 
 ```bash
 $ pdfmath extract examples/sample.pdf --bbox 286,612,326,641 --mathml
@@ -163,12 +174,13 @@ of guessing.
 
 ### 5. When an equation is missed
 
-Detection covers *displayed* equations. The sample's last paragraph has an inline
-`$\sqrt{a^2+b^2}$`, and `extract` walks past it. Give it the box directly:
+The sample's last sentence also names a vector `$\mathbf{v}$`, and nothing finds it —
+`\mathbf` and bold prose are the same font, so the distinction is not on the page to be
+found. Give it the box directly:
 
 ```bash
-$ pdfmath extract examples/sample.pdf --bbox 170,448,216,467 --style text --asciimath
-sqrt(a^2 + b^2)
+$ pdfmath extract examples/sample.pdf --bbox 212,446,222,456 --style text --asciimath
+v
 ```
 
 `--bbox` is `x0,y0,x1,y1` in TeX points from the bottom-left of the page (`--bbox-bp` for
@@ -176,6 +188,29 @@ PDF big points), and `--style` tells the parser which math style to expect, sinc
 changes every Appendix G prediction. This is also the workaround when detection misses a
 display — numbered equations are one known case, because the tag pushed out by `\hfill`
 widens the line past what the detector expects.
+
+#### How inline detection works
+
+An inline formula has no shape to find it by: it sits in the middle of a sentence, on the
+same baseline, in the same paragraph. What it has instead is TeX's own bookkeeping.
+
+* **The font.** TeX sets prose from the roman font and mathematics from cmmi, cmsy and
+  cmex. There is no way to type a cmmi glyph outside mathematics, so every one is a seed.
+  This finds more than variables: the comma in `$[0,1]$` comes from cmmi, and it is the
+  only non-roman character in that formula.
+* **The gap, which calibrates itself.** Interword glue stretches so a line can be
+  justified; math glue does not. So the word space is a property of *this line*,
+  measurable from the line's own gaps — 6.4 mu on one line here, 6.1 on the next — and
+  every automatic math space is at most 5 mu. That is what separates `\log n` from two
+  words, with no threshold in points that would be wrong at another size.
+* **The character class.** Roman characters do appear in formulas — digits, `+`, `=`,
+  parentheses, capital Greek — so a seed grows outward through those and stops at a roman
+  *letter*, which is prose. Operator names (`log`, `sin`, `max`) are the exception and are
+  recognised as a set.
+
+What it cannot do is find a formula containing no math-font glyph at all: `$\mathbf{v}$`
+is cmbx and so is bold prose; `$2$` is a roman digit and so is a page number. Those are
+undecidable rather than hard — TeX threw the distinction away — and they are left alone.
 
 ### 6. Ask why
 
@@ -311,8 +346,10 @@ fonts, displayed equations, display and text style, fractions, scripts, radicals
 delimiters (including built-up cmex assemblies), large operators with limits, matrices,
 accents, over/underlines, and the inter-atom spacing table.
 
-Not yet: inline equations found automatically (pass `--bbox`), numbered displays reliably
-detected, XeTeX/LuaTeX OpenType math, Type 3 fonts, scanned pages (out of scope by
+Inline formulas are found with `--inline`, from the fonts TeX switched to and the glue it
+inserted rather than from any shape on the page.
+
+Not yet: numbered displays reliably detected, XeTeX/LuaTeX OpenType math, Type 3 fonts, scanned pages (out of scope by
 design), `\overbrace`-style horizontal braces, and alignment recovery in `align` beyond a
 table of rows. [docs/architecture.md] lists the known limitations with reasons.
 

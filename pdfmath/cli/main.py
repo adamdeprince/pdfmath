@@ -89,17 +89,12 @@ def cmd_debug_svg(args: argparse.Namespace) -> int:
 
 
 def _parse_region(page, region: Optional[BBox], style: Style):
-    src = page.in_region(region) if region else page
-    from ..parse.context import infer_math_sizes
-    levels = infer_math_sizes([g.size for g in src.glyphs])
-    ctx = ParseContext(text_size=levels[0], style=style, trace=Trace(),
-                       math_sizes=levels)
-    tree, ctx = parse(src.glyphs, src.rules, ctx)
-    return src, tree, ctx
+    from ..parse.driver import parse_region
+    return parse_region(page, region, style)
 
 
 def cmd_extract(args: argparse.Namespace) -> int:
-    from ..detection.equations import find_displayed_equations
+    from ..detection import find_equations
 
     style = _style(args.style)
     results = []
@@ -107,15 +102,19 @@ def cmd_extract(args: argparse.Namespace) -> int:
     pages = list(extract_pages(args.pdf, [args.page] if args.page else None))
     region = _bbox(args.bbox, args.bbox_bp)
     for page in pages:
-        regions = ([type("R", (), {"bbox": region, "confidence": 1.0,
+        regions = ([type("R", (), {"bbox": region, "confidence": 1.0, "style": None,
                                    "evidence": {"source": "--bbox"}})()]
                    if region is not None
-                   else find_displayed_equations(page))
+                   else find_equations(page, inline=args.inline))
         equations = []
         for r in regions:
-            src, tree, ctx = _parse_region(page, r.bbox, style)
+            # A region found inline was set in text style; one found by its shape was
+            # set in display style.  Every Appendix G prediction depends on which.
+            region_style = _style(r.style) if getattr(r, "style", None) else style
+            src, tree, ctx = _parse_region(page, r.bbox, region_style)
             entry: dict[str, Any] = {
                 "bbox": [round(v, 4) for v in r.bbox.as_list()],
+                "style": region_style.name.lower(),
                 "confidence": round(min(tree.structural_confidence(),
                                         r.confidence), 6),
                 "spacing_confidence": round(tree.spacing_confidence(), 6),
@@ -217,17 +216,20 @@ def _single_text_format(args: argparse.Namespace) -> Optional[str]:
 
 def cmd_speak(args: argparse.Namespace) -> int:
     """Read a document's equations aloud, as text."""
-    from ..detection.equations import find_displayed_equations
+    from ..detection import find_equations
     from ..speech import SpeechError, speak_batch, speech_mathml
 
     style = _style(args.style)
     found: list[tuple[int, Any, Any]] = []
     for page in extract_pages(args.pdf, [args.page] if args.page else None):
         region = _bbox(args.bbox, args.bbox_bp)
-        boxes = ([region] if region is not None
-                 else [r.bbox for r in find_displayed_equations(page)])
-        for box in boxes:
-            _, tree, _ = _parse_region(page, box, style)
+        if region is not None:
+            regions = [(region, style)]
+        else:
+            regions = [(r.bbox, _style(r.style))
+                       for r in find_equations(page, inline=args.inline)]
+        for box, region_style in regions:
+            _, tree, _ = _parse_region(page, box, region_style)
             found.append((page.page, box, tree))
     if not found:
         print("no displayed equation detected; pass --bbox to speak a region directly",
@@ -612,6 +614,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     e = sub.add_parser("extract", help="decompile equations to MathML")
     add_common(e)
+    e.add_argument("--inline", action="store_true",
+                   help="also find formulas inside paragraphs, not just displays")
     e.add_argument("--mathml", action="store_true", help="print MathML only")
     e.add_argument("--latex", action="store_true", help="include LaTeX")
     e.add_argument("--asciimath", action="store_true",
@@ -646,6 +650,8 @@ def build_parser() -> argparse.ArgumentParser:
     k.add_argument("--bbox-bp", action="store_true",
                    help="interpret --bbox in PDF big points instead")
     k.add_argument("--style", choices=[s.name.lower() for s in Style], default="display")
+    k.add_argument("--inline", action="store_true",
+                   help="also read formulas inside paragraphs, not just displays")
     k.add_argument("--rules", choices=SPEECH_DOMAINS, default="clearspeak",
                    help="clearspeak reads naturally; mathspeak is unambiguous")
     k.add_argument("--verbosity", choices=SPEECH_STYLES, default="default",

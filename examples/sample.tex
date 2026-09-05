@@ -3,9 +3,9 @@
 % Build it with:
 %     pdflatex -output-directory=examples examples/sample.tex
 %
-% Three displayed equations, which the detector finds, and one inline formula in the
-% last paragraph, which it does not -- inline mathematics is out of scope for detection,
-% so the tutorial uses it to show --bbox.
+% Three displayed equations, which the detector finds; one inline formula, which
+% `--inline` finds; and one bold vector, which nothing can find, because \mathbf and
+% bold prose are the same font.  The last is what the tutorial uses to show --bbox.
 \documentclass[11pt]{article}
 \usepackage{amsmath,amssymb}
 \pagestyle{empty}
@@ -26,7 +26,8 @@ A = \begin{pmatrix} a & b \\ c & d \end{pmatrix},
 \det A = ad - bc .
 \]
 
-Inline formulae are not detected, only displayed ones. This sentence
-contains $\sqrt{a^2 + b^2}$ so the tutorial has something to point at.
+This sentence contains $\sqrt{a^2+b^2}$ inline, which \texttt{--inline}
+finds. It also names the vector $\mathbf{v}$, which nothing can find:
+\verb|\mathbf| and bold prose are the same font.
 
 \end{document}

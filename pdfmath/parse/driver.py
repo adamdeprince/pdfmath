@@ -403,3 +403,23 @@ def parse_page(extract: PageExtract, region: Optional[BBox] = None,
                ctx: Optional[ParseContext] = None) -> tuple[MathNode, ParseContext]:
     src = extract.in_region(region) if region is not None else extract
     return parse(src.glyphs, src.rules, ctx)
+
+
+def parse_region(extract: PageExtract, region: Optional[BBox] = None,
+                 style: Style = Style.DISPLAY,
+                 trace: bool = True) -> tuple[PageExtract, MathNode, ParseContext]:
+    """Decompile one region of a page, and hand back what was read as well as the tree.
+
+    The difference from :func:`parse_page` is that the size levels are inferred from the
+    glyphs actually inside *region* rather than from the whole page: a displayed equation
+    surrounded by body text would otherwise take the body's size as its own, and every
+    Appendix G prediction is in terms of that size.  The extract is returned too, because
+    a caller that wants to report glyph counts or provenance needs the same subset the
+    parse saw.
+    """
+    src = extract.in_region(region) if region is not None else extract
+    levels = infer_math_sizes([g.size for g in src.glyphs])
+    ctx = ParseContext(text_size=levels[0], style=style,
+                       trace=Trace() if trace else None, math_sizes=levels)
+    tree, ctx = parse(src.glyphs, src.rules, ctx)
+    return src, tree, ctx

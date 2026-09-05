@@ -31,7 +31,7 @@ import tempfile
 from typing import Optional, Sequence
 
 from ..mathml.serializer import to_mathml
-from ..tree.nodes import MathNode, Space, Text, Unknown
+from ..tree.nodes import Leaf, MathNode, Space, Text, Unknown
 
 #: Rule sets.  ClearSpeak reads the way a person would say it; MathSpeak is unambiguous
 #: and reversible, which is what you want when checking someone else's algebra.
@@ -86,9 +86,20 @@ def _prepare(node: MathNode) -> MathNode:
     information about the structure, but an ``mspace`` is read aloud as "empty", so a
     ``\\quad`` before an equation number becomes a spoken word.  Speech gets its pauses
     from the rule set, not from the page.
+
+    *An upright single letter stops saying so.*  ``mathvariant="normal"`` is correct
+    MathML for the capital Greek TeX sets from the roman font, but the engine reads the
+    attribute aloud -- ``\\Omega`` comes out as "normal Omega", or worse, as "ohms",
+    because upright omega collates with the ohm sign.  Upright against italic is a fact
+    about rendering and not one a listener needs, so it is dropped for speech alone.
     """
     if isinstance(node, Unknown) and not node.text:
         return Text(text=UNKNOWN_PHRASE, prov=node.prov)
+    if (isinstance(node, Leaf) and node.mathvariant == "normal"
+            and len(node.text) == 1 and node.text.isalpha()):
+        clone = _copy.copy(node)
+        clone.mathvariant = "italic"   # the serialiser's default here, so no attribute
+        return clone
     if not node.children:
         return node
     replaced = [_prepare(c) for c in node.children if not isinstance(c, Space)]
