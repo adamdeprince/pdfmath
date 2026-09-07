@@ -65,8 +65,29 @@ def test_an_unknown_rule_set_is_refused_before_the_engine_starts():
         engine.speak_batch(["<math></math>"], domain="esperanto")
 
 
-def test_the_install_hint_names_something_runnable():
-    assert "npm install" in engine.install_hint()
+def test_the_install_hint_names_something_runnable(monkeypatch):
+    """The hint is only a hint when something is actually missing.
+
+    It has to name a directory the reader can create, because a pip install has nowhere
+    to put sixty megabytes of JavaScript and there may be no checkout in sight.
+    """
+    monkeypatch.setattr(engine, "_engine_home", lambda: None)
+    hint = engine.install_hint()
+    assert "npm install speech-rule-engine" in hint
+    assert "PDFMATH_SRE_HOME" in hint
+
+
+def test_the_hint_says_so_when_nothing_is_missing(monkeypatch):
+    monkeypatch.setattr(engine.shutil, "which", lambda name: "/usr/bin/node")
+    monkeypatch.setattr(engine, "_engine_home", lambda: "/somewhere")
+    assert engine.install_hint() == "speech is available"
+
+
+def test_the_bridge_travels_with_the_package():
+    """A pip install has no tools/sre, so speak.js ships inside pdfmath itself."""
+    import os
+    assert os.path.exists(engine._bridge())
+    assert os.path.basename(engine._bridge()) == "speak.js"
 
 
 def test_an_empty_batch_needs_no_engine():

@@ -372,8 +372,14 @@ table of rows. [docs/architecture.md] lists the known limitations with reasons.
 
 ## Licence
 
-MIT. Dependencies are MIT/BSD/MPL; PyMuPDF is deliberately avoided because it is
-AGPL-3.0 and would be viral for downstream users.
+Apache 2.0, which brings an explicit patent grant that MIT does not have and matches the
+neighbours this project reuses and is measured against — speech-rule-engine and
+SymbolScraper are both Apache 2.0. The one thing it gives up is GPLv2 compatibility;
+GPLv3 is fine.
+
+Dependencies are MIT/BSD/MPL. PyMuPDF is deliberately avoided because it is AGPL-3.0 and
+would be viral for downstream users. `NOTICE` records the third-party tables the
+generated data files are derived from.
 
 [docs/architecture.md]: docs/architecture.md
 [docs/evaluation.md]: docs/evaluation.md

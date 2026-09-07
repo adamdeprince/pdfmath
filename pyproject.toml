@@ -8,8 +8,24 @@ version = "0.1.0"
 description = "A decompiler for TeX mathematics: born-digital PDF -> layout tree -> Presentation MathML"
 readme = "README.md"
 requires-python = ">=3.10"
-license = "MIT"
-authors = [{ name = "pdfmath contributors" }]
+license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE"]
+authors = [{ name = "Adam DePrince", email = "adam.deprince@gmail.com" }]
+keywords = ["tex", "latex", "pdf", "mathml", "mathematics", "accessibility",
+            "decompiler", "asciimath", "omml", "speech"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Mathematics",
+    "Topic :: Text Processing :: Markup :: LaTeX",
+    "Topic :: Adaptive Technologies",
+]
 dependencies = [
     "pdfminer.six>=20231228",
 ]
@@ -21,6 +37,11 @@ dev = ["pytest>=7", "hypothesis>=6"]
 oracles = ["py-asciimath>=0.3", "pypandoc_binary>=1.13"]
 pdf = ["pikepdf>=8"]
 
+[project.urls]
+Homepage = "https://github.com/adamdeprince/pdfmath"
+Repository = "https://github.com/adamdeprince/pdfmath"
+Issues = "https://github.com/adamdeprince/pdfmath/issues"
+
 [project.scripts]
 pdfmath = "pdfmath.cli.main:main"
 
@@ -29,6 +50,10 @@ include = ["pdfmath*"]
 
 [tool.setuptools.package-data]
 "pdfmath.fonts.data" = ["*.py"]
+"pdfmath.latex.data" = ["*.py"]
+# The bridge to the speech engine travels with the package; the engine itself is 60 MB
+# of JavaScript and is installed separately (see pdfmath.speech.engine).
+"pdfmath.speech" = ["*.js"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

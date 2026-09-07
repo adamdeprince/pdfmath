@@ -44,11 +44,36 @@ STYLES = ("default", "brief", "sbrief")
 #: How an unnamed glyph is spoken.  Deliberately not a symbol.
 UNKNOWN_PHRASE = "unrecognised symbol"
 
-_BRIDGE = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(
-    os.path.abspath(__file__)))), "tools", "sre", "speak.js")
+_HERE = os.path.dirname(os.path.abspath(__file__))
 
-_INSTALL = ("speech-rule-engine is not installed.  From the repository root:\n"
-            "    cd tools/sre && npm install")
+#: Where the rule engine may be installed, best first.  A checkout keeps it in
+#: ``tools/sre`` next to the bridge that was developed against it; an installed copy has
+#: nowhere to put 60 MB of JavaScript, so it goes in the user cache instead.  Both are
+#: searched because the same code has to work either way.
+SRE_HOME = os.environ.get("PDFMATH_SRE_HOME")
+_REPO_SRE = os.path.join(os.path.dirname(os.path.dirname(_HERE)), "tools", "sre")
+_USER_SRE = os.path.join(
+    os.environ.get("XDG_CACHE_HOME", os.path.expanduser("~/.cache")), "pdfmath", "sre")
+
+
+def _homes() -> list[str]:
+    return [h for h in (SRE_HOME, _REPO_SRE, _USER_SRE) if h]
+
+
+def _engine_home() -> Optional[str]:
+    """The first directory that actually has the rule engine installed under it."""
+    for home in _homes():
+        if os.path.isdir(os.path.join(home, "node_modules", "speech-rule-engine")):
+            return home
+    return None
+
+
+def _bridge() -> str:
+    """The bridge script: shipped inside the package, or the checkout's copy."""
+    packaged = os.path.join(_HERE, "speak.js")
+    if os.path.exists(packaged):
+        return packaged
+    return os.path.join(_REPO_SRE, "speak.js")
 
 
 class SpeechError(RuntimeError):
@@ -56,18 +81,26 @@ class SpeechError(RuntimeError):
 
 
 def install_hint() -> str:
+    """Exactly what to run, for whichever of the two things is missing."""
+    lines = []
     if shutil.which("node") is None:
-        return ("node is not on PATH.  Install Node.js (for example `brew install "
-                "node`), then:\n    cd tools/sre && npm install")
-    return _INSTALL
+        lines.append("node is not on PATH.  Install Node.js, for example:")
+        lines.append("    brew install node        # or your package manager")
+    if _engine_home() is None:
+        lines.append("speech-rule-engine is not installed.  Either:")
+        lines.append(f"    mkdir -p {_USER_SRE} && cd {_USER_SRE} && "
+                     "npm install speech-rule-engine")
+        lines.append("or, in a checkout of this repository:")
+        lines.append("    cd tools/sre && npm install")
+        lines.append("Set PDFMATH_SRE_HOME to use a different directory.")
+    return "\n".join(lines) or "speech is available"
 
 
 def available() -> bool:
     """True when node and the rule engine are both present."""
-    if shutil.which("node") is None or not os.path.exists(_BRIDGE):
+    if shutil.which("node") is None or not os.path.exists(_bridge()):
         return False
-    return os.path.isdir(os.path.join(os.path.dirname(_BRIDGE), "node_modules",
-                                      "speech-rule-engine"))
+    return _engine_home() is not None
 
 
 def speech_mathml(tree: MathNode, **kw) -> str:
@@ -130,7 +163,15 @@ def speak_batch(items: Sequence[str], domain: str = "clearspeak",
         with open(inp, "w", encoding="utf-8") as fh:
             json.dump(request, fh)
         try:
-            proc = subprocess.run(["node", _BRIDGE, inp, out],
+            # NODE_PATH so the bridge can require the engine wherever it was
+            # installed: the script and the modules need not sit together.
+            env = dict(os.environ)
+            home = _engine_home()
+            if home:
+                modules = os.path.join(home, "node_modules")
+                env["NODE_PATH"] = os.pathsep.join(
+                    [modules] + ([env["NODE_PATH"]] if env.get("NODE_PATH") else []))
+            proc = subprocess.run(["node", _bridge(), inp, out], env=env,
                                   capture_output=True, text=True, timeout=timeout)
         except subprocess.TimeoutExpired as exc:
             raise SpeechError(f"the speech engine timed out after {timeout}s") from exc
