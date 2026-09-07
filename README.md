@@ -372,10 +372,11 @@ table of rows. [docs/architecture.md] lists the known limitations with reasons.
 
 ## Licence
 
-Apache 2.0, which brings an explicit patent grant that MIT does not have and matches the
-neighbours this project reuses and is measured against — speech-rule-engine and
-SymbolScraper are both Apache 2.0. The one thing it gives up is GPLv2 compatibility;
-GPLv3 is fine.
+MIT, chosen over Apache 2.0 for GPLv2 compatibility. That matters here because the
+screen readers this work is ultimately for are GPLv2 — NVDA among them — and MIT code can
+be incorporated into them where Apache 2.0 code cannot. The cost is that MIT says nothing
+about patents, which for an implementation of published 1980s typesetting rules is a
+theoretical concern rather than a real one.
 
 Dependencies are MIT/BSD/MPL. PyMuPDF is deliberately avoided because it is AGPL-3.0 and
 would be viral for downstream users. `NOTICE` records the third-party tables the

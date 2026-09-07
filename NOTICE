@@ -1,8 +1,9 @@
 pdfmath
 Copyright 2026 Adam DePrince
 
-This product includes data derived from third-party sources, all of it factual
-tables rather than code:
+Attribution for the data this project generates from other people's work. None
+of it is code; it is all factual tables, and the generators are in tools/ so
+they can be re-run.
 
   * Glyph-name and encoding tables generated from the Adobe Font Metrics files
     distributed with TeX Live for the Computer Modern and AMS fonts.
@@ -12,8 +13,6 @@ tables rather than code:
     \DeclareMathSymbol tables.
   * WordPerfect 5.1 equation-language vocabulary checked against the equation
     parser in the wp51 project.
-
-The generators that produced these tables are in tools/ and can be re-run.
 
 pdfmath speaks mathematics through MathJax's speech-rule-engine
 (https://github.com/Speech-Rule-Engine/speech-rule-engine), which is licensed
